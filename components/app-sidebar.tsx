@@ -160,7 +160,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       {/* Sidebar Content - Navigation Groups */}
-      <SidebarContent>
+      <SidebarContent id="sidebar-navigation">
         {/* Main Navigation - Primary features */}
         <NavMain items={data.navMain} />
 

@@ -147,11 +147,11 @@ export default function DashboardPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title="Dashboard" />
-        <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {isLoading ? <DashboardSkeleton /> : <DashboardContent />}
           </div>
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )

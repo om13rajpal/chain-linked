@@ -2,9 +2,12 @@
 
 import * as React from "react"
 import {
+  IconCheck,
   IconChevronLeft,
   IconChevronRight,
   IconCalendarEvent,
+  IconClock,
+  IconX,
 } from "@tabler/icons-react"
 import {
   format,
@@ -19,6 +22,10 @@ import {
   isPast,
   addMonths,
   subMonths,
+  addDays,
+  subDays,
+  addWeeks,
+  subWeeks,
 } from "date-fns"
 
 import { Button } from "@/components/ui/button"
@@ -183,6 +190,24 @@ function getStatusDotClass(status: ScheduledPostItem["status"]): string {
 }
 
 /**
+ * Returns the icon component for a post status.
+ * Provides color-independent status indication for accessibility.
+ * @param status - The post status
+ * @returns Icon element for the status
+ */
+function StatusIcon({ status }: { status: ScheduledPostItem["status"] }) {
+  switch (status) {
+    case "posted":
+      return <IconCheck className="size-2" />
+    case "failed":
+      return <IconX className="size-2" />
+    case "pending":
+    default:
+      return <IconClock className="size-2" />
+  }
+}
+
+/**
  * Gets posts for a specific date.
  * @param posts - All scheduled posts
  * @param date - The date to filter by
@@ -265,12 +290,14 @@ function DayCell({
   date,
   posts,
   isCurrentMonth,
+  isFocused = false,
   onDateClick,
   onPostClick,
 }: {
   date: Date
   posts: ScheduledPostItem[]
   isCurrentMonth: boolean
+  isFocused?: boolean
   onDateClick?: (date: Date) => void
   onPostClick?: (post: ScheduledPostItem) => void
 }) {
@@ -285,18 +312,14 @@ function DayCell({
         "hover:bg-muted/50",
         !isCurrentMonth && "bg-muted/30",
         past && isCurrentMonth && "text-muted-foreground",
-        today && "ring-2 ring-primary ring-offset-2"
+        today && "ring-2 ring-primary ring-offset-2",
+        isFocused && "ring-2 ring-primary ring-offset-1 bg-accent/50"
       )}
       onClick={() => onDateClick?.(date)}
-      role="button"
-      tabIndex={0}
+      role="gridcell"
+      tabIndex={-1}
       aria-label={`${format(date, "MMMM d, yyyy")}${dayPosts.length > 0 ? `, ${dayPosts.length} scheduled posts` : ""}`}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          onDateClick?.(date)
-        }
-      }}
+      aria-selected={isFocused}
     >
       {/* Date number */}
       <div
@@ -318,7 +341,7 @@ function DayCell({
                 <TooltipTrigger asChild>
                   <button
                     className={cn(
-                      "size-2.5 rounded-full transition-transform hover:scale-125 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary",
+                      "size-4 rounded-full transition-transform hover:scale-125 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary flex items-center justify-center text-white",
                       getStatusDotClass(post.status)
                     )}
                     onClick={(e) => {
@@ -326,7 +349,9 @@ function DayCell({
                       onPostClick?.(post)
                     }}
                     aria-label={`${post.status} post: ${truncateContent(post.content, 30)}`}
-                  />
+                  >
+                    <StatusIcon status={post.status} />
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[200px]">
                   <p className="text-xs font-medium capitalize mb-1">
@@ -405,6 +430,8 @@ export function ScheduleCalendar({
   className,
 }: ScheduleCalendarProps) {
   const [internalMonth, setInternalMonth] = React.useState(new Date())
+  const [focusedDate, setFocusedDate] = React.useState<Date | null>(null)
+  const gridRef = React.useRef<HTMLDivElement>(null)
 
   // Use controlled or internal month state
   const currentMonth = controlledMonth ?? internalMonth
@@ -436,6 +463,63 @@ export function ScheduleCalendar({
       setInternalMonth(today)
     }
   }
+
+  /**
+   * Handles keyboard navigation within the calendar grid.
+   * Supports arrow keys for date navigation and Enter/Space for selection.
+   */
+  const handleGridKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const currentFocus = focusedDate || new Date()
+
+      let newDate: Date | null = null
+
+      switch (e.key) {
+        case "ArrowRight":
+          e.preventDefault()
+          newDate = addDays(currentFocus, 1)
+          break
+        case "ArrowLeft":
+          e.preventDefault()
+          newDate = subDays(currentFocus, 1)
+          break
+        case "ArrowDown":
+          e.preventDefault()
+          newDate = addWeeks(currentFocus, 1)
+          break
+        case "ArrowUp":
+          e.preventDefault()
+          newDate = subWeeks(currentFocus, 1)
+          break
+        case "Enter":
+        case " ":
+          e.preventDefault()
+          if (focusedDate) {
+            onDateClick?.(focusedDate)
+          }
+          return
+        case "Escape":
+          e.preventDefault()
+          setFocusedDate(null)
+          return
+        default:
+          return
+      }
+
+      if (newDate) {
+        setFocusedDate(newDate)
+        // Auto-navigate to new month if needed
+        if (!isSameMonth(newDate, currentMonth)) {
+          if (onMonthChange) {
+            onMonthChange(newDate)
+          } else {
+            setInternalMonth(newDate)
+          }
+        }
+      }
+    },
+    [focusedDate, currentMonth, onMonthChange, onDateClick]
+  )
 
   // Calculate calendar days
   const monthStart = startOfMonth(currentMonth)
@@ -493,18 +577,24 @@ export function ScheduleCalendar({
           <EmptyState />
         ) : (
           <>
-            {/* Legend */}
+            {/* Legend - includes icons for color-independent status */}
             <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-green-500" />
+                <span className="size-4 rounded-full bg-green-500 flex items-center justify-center text-white">
+                  <IconClock className="size-2" />
+                </span>
                 <span>Pending</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-blue-500" />
+                <span className="size-4 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                  <IconCheck className="size-2" />
+                </span>
                 <span>Posted</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-red-500" />
+                <span className="size-4 rounded-full bg-red-500 flex items-center justify-center text-white">
+                  <IconX className="size-2" />
+                </span>
                 <span>Failed</span>
               </div>
             </div>
@@ -521,15 +611,31 @@ export function ScheduleCalendar({
               ))}
             </div>
 
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-1">
+            {/* Calendar grid with keyboard navigation */}
+            <div
+              ref={gridRef}
+              className="grid grid-cols-7 gap-1"
+              role="grid"
+              aria-label="Calendar"
+              tabIndex={0}
+              onKeyDown={handleGridKeyDown}
+              onFocus={() => {
+                if (!focusedDate) {
+                  setFocusedDate(new Date())
+                }
+              }}
+            >
               {calendarDays.map((date) => (
                 <DayCell
                   key={date.toISOString()}
                   date={date}
                   posts={posts}
                   isCurrentMonth={isSameMonth(date, currentMonth)}
-                  onDateClick={onDateClick}
+                  isFocused={focusedDate ? isSameDay(date, focusedDate) : false}
+                  onDateClick={(d) => {
+                    onDateClick?.(d)
+                    setFocusedDate(d)
+                  }}
                   onPostClick={onPostClick}
                 />
               ))}

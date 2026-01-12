@@ -54,11 +54,11 @@ export default function SchedulePage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title="Schedule" />
-        <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {isLoading ? <ScheduleSkeleton /> : <ScheduleContent />}
           </div>
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )

@@ -46,11 +46,11 @@ export default function TeamPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title="Team" />
-        <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {isLoading ? <TeamSkeleton /> : <TeamContent />}
           </div>
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )

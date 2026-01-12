@@ -73,11 +73,11 @@ export default function AnalyticsPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title="Analytics" />
-        <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {isLoading ? <AnalyticsSkeleton /> : <AnalyticsContent />}
           </div>
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )

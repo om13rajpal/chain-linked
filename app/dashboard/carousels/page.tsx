@@ -46,11 +46,11 @@ export default function CarouselsPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title="Carousels" />
-        <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {isLoading ? <CarouselsSkeleton /> : <CarouselsContent />}
           </div>
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )

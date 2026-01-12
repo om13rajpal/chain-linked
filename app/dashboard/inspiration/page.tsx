@@ -57,11 +57,11 @@ export default function InspirationPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title="Inspiration" />
-        <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {isLoading ? <InspirationSkeleton /> : <InspirationContent />}
           </div>
-        </div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )
