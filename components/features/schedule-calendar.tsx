@@ -82,8 +82,11 @@ export interface ScheduleCalendarProps {
   className?: string
 }
 
-/** Day names for the calendar header */
+/** Day names for the calendar header (desktop) */
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+/** Abbreviated day names for mobile */
+const DAY_NAMES_MOBILE = ["S", "M", "T", "W", "T", "F", "S"]
 
 /**
  * Sample data for development and testing purposes.
@@ -308,11 +311,11 @@ function DayCell({
   return (
     <div
       className={cn(
-        "min-h-20 p-1 border rounded-md transition-colors cursor-pointer",
+        "min-h-16 sm:min-h-20 p-0.5 sm:p-1 border rounded-md transition-colors cursor-pointer",
         "hover:bg-muted/50",
         !isCurrentMonth && "bg-muted/30",
         past && isCurrentMonth && "text-muted-foreground",
-        today && "ring-2 ring-primary ring-offset-2",
+        today && "ring-2 ring-primary ring-offset-1 sm:ring-offset-2",
         isFocused && "ring-2 ring-primary ring-offset-1 bg-accent/50"
       )}
       onClick={() => onDateClick?.(date)}
@@ -432,9 +435,40 @@ export function ScheduleCalendar({
   const [internalMonth, setInternalMonth] = React.useState(new Date())
   const [focusedDate, setFocusedDate] = React.useState<Date | null>(null)
   const gridRef = React.useRef<HTMLDivElement>(null)
+  const touchStartRef = React.useRef<number | null>(null)
 
   // Use controlled or internal month state
   const currentMonth = controlledMonth ?? internalMonth
+
+  /**
+   * Handles touch start for swipe detection.
+   */
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = e.touches[0].clientX
+  }
+
+  /**
+   * Handles touch end to detect swipe direction and navigate months.
+   */
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartRef.current === null) return
+
+    const touchEnd = e.changedTouches[0].clientX
+    const diff = touchStartRef.current - touchEnd
+    const threshold = 50 // Minimum swipe distance
+
+    if (Math.abs(diff) > threshold) {
+      if (diff > 0) {
+        // Swipe left - next month
+        handleMonthChange("next")
+      } else {
+        // Swipe right - previous month
+        handleMonthChange("prev")
+      }
+    }
+
+    touchStartRef.current = null
+  }
 
   /**
    * Handles month navigation.
@@ -572,13 +606,16 @@ export function ScheduleCalendar({
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {posts.length === 0 ? (
           <EmptyState />
         ) : (
           <>
             {/* Legend - includes icons for color-independent status */}
-            <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 sm:gap-4 mb-4 text-xs text-muted-foreground flex-wrap">
               <div className="flex items-center gap-1.5">
                 <span className="size-4 rounded-full bg-green-500 flex items-center justify-center text-white">
                   <IconClock className="size-2" />
@@ -599,14 +636,16 @@ export function ScheduleCalendar({
               </div>
             </div>
 
-            {/* Day headers */}
+            {/* Day headers - abbreviated on mobile */}
             <div className="grid grid-cols-7 gap-1 mb-2">
-              {DAY_NAMES.map((day) => (
+              {DAY_NAMES.map((day, index) => (
                 <div
                   key={day}
                   className="text-center text-xs font-medium text-muted-foreground py-2"
+                  aria-label={day}
                 >
-                  {day}
+                  <span className="hidden sm:inline">{day}</span>
+                  <span className="sm:hidden">{DAY_NAMES_MOBILE[index]}</span>
                 </div>
               ))}
             </div>
