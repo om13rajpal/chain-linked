@@ -223,7 +223,7 @@ export function MediaUpload({
   files,
   onFilesChange,
   maxFiles = MAX_IMAGES,
-  maxSizeMB,
+  maxSizeMB: _maxSizeMB,
   acceptedTypes = DEFAULT_ACCEPTED_TYPES,
   onUpload,
   disabled = false,
@@ -242,6 +242,66 @@ export function MediaUpload({
   const hasVideo = files.some((f) => f.type === "video")
   const imageCount = files.filter((f) => f.type === "image").length
   const isAtLimit = hasVideo || imageCount >= maxFiles
+
+  /**
+   * Simulates upload progress or calls the real upload handler
+   */
+  const simulateOrUpload = React.useCallback(
+    async (mediaFile: MediaFile, currentFiles: MediaFile[]) => {
+      // Update status to uploading
+      const startUpload = currentFiles.map((f) =>
+        f.id === mediaFile.id ? { ...f, status: "uploading" as const } : f
+      )
+      onFilesChange(startUpload)
+
+      if (onUpload) {
+        // Real upload with callback
+        try {
+          await onUpload(mediaFile.file)
+          const completeUpload = startUpload.map((f) =>
+            f.id === mediaFile.id
+              ? { ...f, status: "complete" as const, uploadProgress: 100 }
+              : f
+          )
+          onFilesChange(completeUpload)
+        } catch (err) {
+          const errorMessage =
+            err instanceof Error ? err.message : "Upload failed"
+          const failedUpload = startUpload.map((f) =>
+            f.id === mediaFile.id
+              ? { ...f, status: "error" as const, error: errorMessage }
+              : f
+          )
+          onFilesChange(failedUpload)
+        }
+      } else {
+        // Simulate upload progress
+        let progress = 0
+        const interval = setInterval(() => {
+          progress += Math.random() * 30 + 10
+          if (progress >= 100) {
+            progress = 100
+            clearInterval(interval)
+
+            const updatedFiles = filesRef.current.map((f) =>
+              f.id === mediaFile.id
+                ? { ...f, status: "complete" as const, uploadProgress: 100 }
+                : f
+            )
+            filesRef.current = updatedFiles
+            onFilesChange(updatedFiles)
+          } else {
+            const updatedFiles = filesRef.current.map((f) =>
+              f.id === mediaFile.id ? { ...f, uploadProgress: progress } : f
+            )
+            filesRef.current = updatedFiles
+            onFilesChange(updatedFiles)
+          }
+        }, 200)
+      }
+    },
+    [onFilesChange, onUpload]
+  )
 
   /**
    * Handles file selection from input or drop
@@ -287,68 +347,8 @@ export function MediaUpload({
         }
       }
     },
-    [files, onFilesChange, acceptedTypes, maxFiles]
+    [files, onFilesChange, acceptedTypes, maxFiles, simulateOrUpload]
   )
-
-  /**
-   * Simulates upload progress or calls the real upload handler
-   */
-  const simulateOrUpload = async (
-    mediaFile: MediaFile,
-    currentFiles: MediaFile[]
-  ) => {
-    // Update status to uploading
-    const startUpload = currentFiles.map((f) =>
-      f.id === mediaFile.id ? { ...f, status: "uploading" as const } : f
-    )
-    onFilesChange(startUpload)
-
-    if (onUpload) {
-      // Real upload with callback
-      try {
-        await onUpload(mediaFile.file)
-        const completeUpload = startUpload.map((f) =>
-          f.id === mediaFile.id
-            ? { ...f, status: "complete" as const, uploadProgress: 100 }
-            : f
-        )
-        onFilesChange(completeUpload)
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Upload failed"
-        const failedUpload = startUpload.map((f) =>
-          f.id === mediaFile.id
-            ? { ...f, status: "error" as const, error: errorMessage }
-            : f
-        )
-        onFilesChange(failedUpload)
-      }
-    } else {
-      // Simulate upload progress
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += Math.random() * 30 + 10
-        if (progress >= 100) {
-          progress = 100
-          clearInterval(interval)
-
-          const updatedFiles = filesRef.current.map((f) =>
-            f.id === mediaFile.id
-              ? { ...f, status: "complete" as const, uploadProgress: 100 }
-              : f
-          )
-          filesRef.current = updatedFiles
-          onFilesChange(updatedFiles)
-        } else {
-          const updatedFiles = filesRef.current.map((f) =>
-            f.id === mediaFile.id ? { ...f, uploadProgress: progress } : f
-          )
-          filesRef.current = updatedFiles
-          onFilesChange(updatedFiles)
-        }
-      }, 200)
-    }
-  }
 
   /**
    * Handles drag over event

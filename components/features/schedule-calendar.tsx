@@ -5,7 +5,6 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconCalendarEvent,
-  IconLoader2,
 } from "@tabler/icons-react"
 import {
   format,
@@ -401,7 +400,7 @@ export function ScheduleCalendar({
   onMonthChange,
   onPostClick,
   onDateClick,
-  onReschedule,
+  onReschedule: _onReschedule,
   isLoading = false,
   className,
 }: ScheduleCalendarProps) {

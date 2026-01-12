@@ -229,7 +229,7 @@ function MiniCalendar({
                 isTodayDate && !isSelected && "ring-1 ring-primary"
               )}
               aria-label={format(date, "MMMM d, yyyy")}
-              aria-selected={isSelected}
+              aria-pressed={isSelected}
             >
               {format(date, "d")}
             </button>
@@ -293,17 +293,17 @@ export function ScheduleModal({
   isSubmitting = false,
 }: ScheduleModalProps) {
   // Initialize with default or current date/time
-  const getInitialDate = () => {
+  const getInitialDate = React.useCallback(() => {
     if (defaultDate) return defaultDate
     const now = new Date()
     // Default to tomorrow if no date provided
     now.setDate(now.getDate() + 1)
     now.setHours(9, 0, 0, 0)
     return now
-  }
+  }, [defaultDate])
 
-  const [selectedDate, setSelectedDate] = React.useState<Date>(getInitialDate)
-  const [displayMonth, setDisplayMonth] = React.useState<Date>(getInitialDate)
+  const [selectedDate, setSelectedDate] = React.useState<Date>(() => getInitialDate())
+  const [displayMonth, setDisplayMonth] = React.useState<Date>(() => getInitialDate())
   const [timezone, setTimezone] = React.useState(defaultTimezone)
 
   // Time state (12-hour format)
@@ -326,7 +326,7 @@ export function ScheduleModal({
       setMinute(Math.floor(initialDate.getMinutes() / 15) * 15)
       setPeriod(time.period)
     }
-  }, [isOpen, defaultDate, defaultTimezone])
+  }, [isOpen, defaultTimezone, getInitialDate])
 
   /**
    * Applies an optimal time suggestion.
