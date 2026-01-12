@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { IconChevronRight, type Icon } from "@tabler/icons-react"
 
 import {
@@ -62,6 +64,8 @@ export function NavContent({
   label = "Content",
   defaultOpen = true,
 }: NavContentProps) {
+  const pathname = usePathname()
+
   return (
     <SidebarGroup>
       <Collapsible defaultOpen={defaultOpen} className="group/collapsible">
@@ -76,11 +80,15 @@ export function NavContent({
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
-                    <a href={item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={pathname === item.url}
+                  >
+                    <Link href={item.url}>
                       <item.icon />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

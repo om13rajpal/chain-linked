@@ -38,9 +38,9 @@ const data = {
    * Current user information displayed in the sidebar footer.
    */
   user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    name: "Demo User",
+    email: "demo@chainlinked.com",
+    avatar: "",
   },
 
   /**
