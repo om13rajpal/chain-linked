@@ -210,10 +210,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
      */
     const initializeSession = async () => {
       try {
+        console.log('[AuthProvider] Initializing session...')
         const { data: { session }, error } = await supabase.auth.getSession()
+        console.log('[AuthProvider] getSession result:', { hasSession: !!session, hasUser: !!session?.user, error })
 
         if (error) {
-          console.error('Session initialization error:', error)
+          console.error('[AuthProvider] Session initialization error:', error)
           if (isMounted) {
             setIsLoading(false)
           }
@@ -223,6 +225,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (!isMounted) return
 
         if (session?.user) {
+          console.log('[AuthProvider] Session found, setting user:', session.user.email)
           setSession(session)
           setUser(session.user)
 
@@ -242,14 +245,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Continue without profile - user is still authenticated
           }
         } else {
+          console.log('[AuthProvider] No session found, clearing state')
           setSession(null)
           setUser(null)
           setProfile(null)
         }
       } catch (err) {
-        console.error('Unexpected initialization error:', err)
+        console.error('[AuthProvider] Unexpected initialization error:', err)
       } finally {
         if (isMounted) {
+          console.log('[AuthProvider] Initialization complete, setting isLoading=false')
           initializationComplete = true
           setIsLoading(false)
         }
@@ -259,9 +264,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Listen for auth state changes (for sign-in, sign-out, token refresh after initial load)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
+        console.log('[AuthProvider] onAuthStateChange:', { event, hasSession: !!newSession, hasUser: !!newSession?.user })
+
         // Skip INITIAL_SESSION since we handle it via getSession() above
         // This prevents duplicate profile fetches
         if (event === 'INITIAL_SESSION') {
+          console.log('[AuthProvider] Skipping INITIAL_SESSION event (handled by getSession)')
           return
         }
 
