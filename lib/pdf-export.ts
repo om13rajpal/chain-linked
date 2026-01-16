@@ -1,17 +1,30 @@
-import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont, RGB } from "pdf-lib"
+/**
+ * PDF Export Utility
+ * @description Exports carousel slides to PDF format using pdf-lib
+ * @module lib/pdf-export
+ */
+
+import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont, RGB } from 'pdf-lib'
 
 /**
- * Represents a single slide in a carousel
+ * Slide type determining the purpose and styling of a carousel slide
+ */
+export type SlideType = 'title' | 'content' | 'stat' | 'cta'
+
+/**
+ * Represents a single slide in a carousel for PDF export
  */
 export interface CarouselSlide {
   /** Unique identifier for the slide */
   id: string
-  /** Title text displayed prominently on the slide */
+  /** Title text (used for title/cta slides) */
   title: string
-  /** Main content text of the slide */
+  /** Main content text (used for content/stat slides) */
   content: string
   /** Order/position of the slide in the carousel (0-indexed) */
   order: number
+  /** Optional slide type for template rendering */
+  slideType?: SlideType
 }
 
 /**
@@ -31,12 +44,12 @@ export interface BrandKit {
 /**
  * Available template types for PDF export
  */
-export type TemplateType = "bold" | "minimalist" | "data" | "story"
+export type TemplateType = 'bold' | 'minimalist' | 'data' | 'story'
 
 /**
  * Available format types for PDF page dimensions
  */
-export type FormatType = "square" | "portrait" | "landscape"
+export type FormatType = 'square' | 'portrait' | 'landscape'
 
 /**
  * Options for exporting a carousel to PDF
@@ -76,7 +89,7 @@ const PAGE_SIZES: Record<FormatType, PageDimensions> = {
  */
 export function hexToRgb(hex: string): RGB {
   // Remove # if present
-  const cleanHex = hex.replace(/^#/, "")
+  const cleanHex = hex.replace(/^#/, '')
 
   // Parse hex values
   const r = parseInt(cleanHex.slice(0, 2), 16) / 255
@@ -100,9 +113,9 @@ function wrapText(
   fontSize: number,
   maxWidth: number
 ): string[] {
-  const words = text.split(" ")
+  const words = text.split(' ')
   const lines: string[] = []
-  let currentLine = ""
+  let currentLine = ''
 
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word
@@ -126,6 +139,41 @@ function wrapText(
 }
 
 /**
+ * Gets the display text for a slide based on its type
+ * @param slide - The slide to get text from
+ * @returns The text to display on the slide
+ */
+function getSlideText(slide: CarouselSlide): { title: string; content: string } {
+  const slideType = slide.slideType || 'content'
+
+  // If slide has explicit title/content from the old format, use those
+  if (slide.title && slide.content) {
+    return { title: slide.title, content: slide.content }
+  }
+
+  // For the new format where title OR content contains the text based on type
+  switch (slideType) {
+    case 'title':
+    case 'cta':
+      return {
+        title: slide.title || slide.content || '',
+        content: '',
+      }
+    case 'stat':
+      return {
+        title: '',
+        content: slide.content || slide.title || '',
+      }
+    case 'content':
+    default:
+      return {
+        title: '',
+        content: slide.content || slide.title || '',
+      }
+  }
+}
+
+/**
  * Draws the bold template style on a page
  * Large title, colored background (primaryColor), white text
  */
@@ -141,63 +189,39 @@ async function drawBoldTemplate(
   const primaryColor = hexToRgb(brandKit.primaryColor)
   const whiteColor = rgb(1, 1, 1)
   const padding = 50
+  const slideType = slide.slideType || 'content'
+  const { title, content } = getSlideText(slide)
 
-  // Draw colored background
+  // Draw colored background for title/cta slides, white for others
+  const isAccentSlide = slideType === 'title' || slideType === 'cta'
   page.drawRectangle({
     x: 0,
     y: 0,
     width,
     height,
-    color: primaryColor,
+    color: isAccentSlide ? primaryColor : rgb(1, 1, 1),
   })
 
-  // Draw title (large, bold, centered)
-  const titleFontSize = 42
-  const titleLines = wrapText(
-    slide.title,
-    fonts.bold,
-    titleFontSize,
-    width - padding * 2
-  )
-  const titleLineHeight = titleFontSize * 1.3
-  const titleBlockHeight = titleLines.length * titleLineHeight
-  let titleY = height - padding - titleBlockHeight / 2 + height * 0.15
+  const textColor = isAccentSlide ? whiteColor : rgb(0.1, 0.1, 0.1)
 
-  for (const line of titleLines) {
-    const textWidth = fonts.bold.widthOfTextAtSize(line, titleFontSize)
+  // Draw main text
+  const mainText = title || content
+  const fontSize = slideType === 'stat' ? 56 : slideType === 'title' ? 42 : 32
+  const lines = wrapText(mainText, fonts.bold, fontSize, width - padding * 2)
+  const lineHeight = fontSize * 1.3
+  const blockHeight = lines.length * lineHeight
+  let textY = (height + blockHeight) / 2
+
+  for (const line of lines) {
+    const textWidth = fonts.bold.widthOfTextAtSize(line, fontSize)
     page.drawText(line, {
       x: (width - textWidth) / 2,
-      y: titleY,
-      size: titleFontSize,
+      y: textY,
+      size: fontSize,
       font: fonts.bold,
-      color: whiteColor,
+      color: textColor,
     })
-    titleY -= titleLineHeight
-  }
-
-  // Draw content (smaller, centered below title)
-  if (slide.content) {
-    const contentFontSize = 24
-    const contentLines = wrapText(
-      slide.content,
-      fonts.regular,
-      contentFontSize,
-      width - padding * 2
-    )
-    const contentLineHeight = contentFontSize * 1.5
-    let contentY = height * 0.4
-
-    for (const line of contentLines) {
-      const textWidth = fonts.regular.widthOfTextAtSize(line, contentFontSize)
-      page.drawText(line, {
-        x: (width - textWidth) / 2,
-        y: contentY,
-        size: contentFontSize,
-        font: fonts.regular,
-        color: whiteColor,
-      })
-      contentY -= contentLineHeight
-    }
+    textY -= lineHeight
   }
 
   // Draw slide number at bottom
@@ -212,7 +236,7 @@ async function drawBoldTemplate(
     y: 30,
     size: slideNumFontSize,
     font: fonts.regular,
-    color: rgb(0.8, 0.8, 0.8),
+    color: isAccentSlide ? rgb(0.8, 0.8, 0.8) : rgb(0.5, 0.5, 0.5),
   })
 }
 
@@ -233,6 +257,8 @@ async function drawMinimalistTemplate(
   const textColor = rgb(0.1, 0.1, 0.1)
   const lightGray = rgb(0.98, 0.98, 0.98)
   const padding = 60
+  const slideType = slide.slideType || 'content'
+  const { title, content } = getSlideText(slide)
 
   // Draw light gray background
   page.drawRectangle({
@@ -243,59 +269,36 @@ async function drawMinimalistTemplate(
     color: lightGray,
   })
 
-  // Draw thin accent line on the left
-  page.drawRectangle({
-    x: padding - 20,
-    y: height * 0.3,
-    width: 4,
-    height: height * 0.4,
-    color: primaryColor,
-  })
-
-  // Draw title
-  const titleFontSize = 32
-  const titleLines = wrapText(
-    slide.title,
-    fonts.bold,
-    titleFontSize,
-    width - padding * 2 - 20
-  )
-  const titleLineHeight = titleFontSize * 1.4
-  let titleY = height - padding - 60
-
-  for (const line of titleLines) {
-    page.drawText(line, {
-      x: padding,
-      y: titleY,
-      size: titleFontSize,
-      font: fonts.bold,
-      color: textColor,
+  // Draw thin accent line on the left for title/cta
+  if (slideType === 'title' || slideType === 'cta') {
+    page.drawRectangle({
+      x: padding - 20,
+      y: height * 0.3,
+      width: 4,
+      height: height * 0.4,
+      color: primaryColor,
     })
-    titleY -= titleLineHeight
   }
 
-  // Draw content
-  if (slide.content) {
-    const contentFontSize = 18
-    const contentLines = wrapText(
-      slide.content,
-      fonts.regular,
-      contentFontSize,
-      width - padding * 2
-    )
-    const contentLineHeight = contentFontSize * 1.6
-    let contentY = height * 0.5
+  // Draw main text
+  const mainText = title || content
+  const fontSize = slideType === 'title' ? 32 : slideType === 'stat' ? 40 : 24
+  const font = slideType === 'title' || slideType === 'stat' ? fonts.bold : fonts.regular
+  const lines = wrapText(mainText, font, fontSize, width - padding * 2 - 20)
+  const lineHeight = fontSize * 1.5
+  const blockHeight = lines.length * lineHeight
+  let textY = (height + blockHeight) / 2
 
-    for (const line of contentLines) {
-      page.drawText(line, {
-        x: padding,
-        y: contentY,
-        size: contentFontSize,
-        font: fonts.regular,
-        color: textColor,
-      })
-      contentY -= contentLineHeight
-    }
+  for (const line of lines) {
+    const textWidth = font.widthOfTextAtSize(line, fontSize)
+    page.drawText(line, {
+      x: (width - textWidth) / 2,
+      y: textY,
+      size: fontSize,
+      font,
+      color: textColor,
+    })
+    textY -= lineHeight
   }
 
   // Draw slide number at bottom center
@@ -332,80 +335,62 @@ async function drawDataTemplate(
   const textColor = rgb(0.1, 0.1, 0.1)
   const whiteColor = rgb(1, 1, 1)
   const padding = 50
+  const slideType = slide.slideType || 'content'
+  const { title, content } = getSlideText(slide)
 
-  // Draw white background
+  // For stat slides, use primary color background
+  const isStatSlide = slideType === 'stat'
+
+  // Draw background
   page.drawRectangle({
     x: 0,
     y: 0,
     width,
     height,
-    color: whiteColor,
+    color: isStatSlide ? primaryColor : whiteColor,
   })
 
-  // Draw large slide number in top left
-  const numberFontSize = 72
-  const numberText = slideNumber.toString().padStart(2, "0")
-  page.drawText(numberText, {
-    x: padding,
-    y: height - padding - 50,
-    size: numberFontSize,
-    font: fonts.bold,
-    color: primaryColor,
-  })
-
-  // Draw horizontal accent line
-  page.drawRectangle({
-    x: padding,
-    y: height - padding - 80,
-    width: width - padding * 2,
-    height: 3,
-    color: secondaryColor,
-  })
-
-  // Draw title
-  const titleFontSize = 28
-  const titleLines = wrapText(
-    slide.title,
-    fonts.bold,
-    titleFontSize,
-    width - padding * 2
-  )
-  const titleLineHeight = titleFontSize * 1.4
-  let titleY = height - padding - 130
-
-  for (const line of titleLines) {
-    page.drawText(line, {
+  // Draw large slide number in top left (not for stat slides)
+  if (!isStatSlide) {
+    const numberFontSize = 72
+    const numberText = slideNumber.toString().padStart(2, '0')
+    page.drawText(numberText, {
       x: padding,
-      y: titleY,
-      size: titleFontSize,
+      y: height - padding - 50,
+      size: numberFontSize,
       font: fonts.bold,
-      color: textColor,
+      color: primaryColor,
     })
-    titleY -= titleLineHeight
+
+    // Draw horizontal accent line
+    page.drawRectangle({
+      x: padding,
+      y: height - padding - 80,
+      width: width - padding * 2,
+      height: 3,
+      color: secondaryColor,
+    })
   }
 
-  // Draw content with larger font for data emphasis
-  if (slide.content) {
-    const contentFontSize = 20
-    const contentLines = wrapText(
-      slide.content,
-      fonts.regular,
-      contentFontSize,
-      width - padding * 2
-    )
-    const contentLineHeight = contentFontSize * 1.6
-    let contentY = height * 0.45
+  // Draw main text
+  const mainText = title || content
+  const fontSize = isStatSlide ? 56 : slideType === 'title' ? 32 : 24
+  const font = isStatSlide || slideType === 'title' ? fonts.bold : fonts.regular
+  const lines = wrapText(mainText, font, fontSize, width - padding * 2)
+  const lineHeight = fontSize * 1.4
+  const blockHeight = lines.length * lineHeight
+  let textY = (height + blockHeight) / 2
 
-    for (const line of contentLines) {
-      page.drawText(line, {
-        x: padding,
-        y: contentY,
-        size: contentFontSize,
-        font: fonts.regular,
-        color: textColor,
-      })
-      contentY -= contentLineHeight
-    }
+  for (const line of lines) {
+    const textWidth = font.widthOfTextAtSize(line, fontSize)
+    page.drawText(line, {
+      x: (width - textWidth) / 2,
+      y: textY,
+      size: fontSize,
+      font,
+      color: isStatSlide ? whiteColor : textColor,
+    })
+    textY -= lineHeight
   }
 
   // Draw slide number at bottom with accent bar
@@ -414,7 +399,7 @@ async function drawDataTemplate(
     y: 0,
     width,
     height: 50,
-    color: primaryColor,
+    color: isStatSlide ? secondaryColor : primaryColor,
   })
 
   const slideNumberText = `${slideNumber} of ${totalSlides}`
@@ -450,80 +435,86 @@ async function drawStoryTemplate(
   const whiteColor = rgb(1, 1, 1)
   const textColor = rgb(0.2, 0.2, 0.2)
   const padding = 50
+  const slideType = slide.slideType || 'content'
+  const { title, content } = getSlideText(slide)
 
-  // Create gradient-like effect with overlapping rectangles
-  // Draw primary color base
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width,
-    height,
-    color: primaryColor,
-  })
+  const isTitleSlide = slideType === 'title'
 
-  // Draw secondary color overlay (diagonal effect)
-  page.drawRectangle({
-    x: width * 0.3,
-    y: 0,
-    width: width * 0.7,
-    height: height,
-    color: secondaryColor,
-    opacity: 0.7,
-  })
-
-  // Draw white content area with slight transparency
-  page.drawRectangle({
-    x: padding,
-    y: padding,
-    width: width - padding * 2,
-    height: height - padding * 2 - 40,
-    color: whiteColor,
-    opacity: 0.95,
-  })
-
-  // Draw title inside the white area
-  const titleFontSize = 30
-  const titleLines = wrapText(
-    slide.title,
-    fonts.bold,
-    titleFontSize,
-    width - padding * 4
-  )
-  const titleLineHeight = titleFontSize * 1.4
-  let titleY = height - padding - 80
-
-  for (const line of titleLines) {
-    page.drawText(line, {
-      x: padding * 2,
-      y: titleY,
-      size: titleFontSize,
-      font: fonts.bold,
-      color: textColor,
+  if (isTitleSlide) {
+    // Create gradient-like effect with overlapping rectangles for title
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width,
+      height,
+      color: primaryColor,
     })
-    titleY -= titleLineHeight
-  }
 
-  // Draw content with narrative-style formatting
-  if (slide.content) {
-    const contentFontSize = 18
-    const contentLines = wrapText(
-      slide.content,
-      fonts.regular,
-      contentFontSize,
-      width - padding * 4
-    )
-    const contentLineHeight = contentFontSize * 1.8
-    let contentY = height * 0.5
+    page.drawRectangle({
+      x: width * 0.3,
+      y: 0,
+      width: width * 0.7,
+      height: height,
+      color: secondaryColor,
+      opacity: 0.7,
+    })
 
-    for (const line of contentLines) {
+    // Draw main text centered
+    const mainText = title || content
+    const fontSize = 38
+    const lines = wrapText(mainText, fonts.bold, fontSize, width - padding * 2)
+    const lineHeight = fontSize * 1.4
+    const blockHeight = lines.length * lineHeight
+    let textY = (height + blockHeight) / 2
+
+    for (const line of lines) {
+      const textWidth = fonts.bold.widthOfTextAtSize(line, fontSize)
       page.drawText(line, {
-        x: padding * 2,
-        y: contentY,
-        size: contentFontSize,
-        font: fonts.regular,
+        x: (width - textWidth) / 2,
+        y: textY,
+        size: fontSize,
+        font: fonts.bold,
+        color: whiteColor,
+      })
+      textY -= lineHeight
+    }
+  } else {
+    // White background with accent for content slides
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width,
+      height,
+      color: whiteColor,
+    })
+
+    // Add subtle left border accent
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width: 6,
+      height: height,
+      color: primaryColor,
+    })
+
+    // Draw main text
+    const mainText = title || content
+    const fontSize = slideType === 'stat' ? 48 : slideType === 'cta' ? 28 : 24
+    const font = slideType === 'stat' ? fonts.bold : fonts.regular
+    const lines = wrapText(mainText, font, fontSize, width - padding * 3)
+    const lineHeight = fontSize * 1.6
+    const blockHeight = lines.length * lineHeight
+    let textY = (height + blockHeight) / 2
+
+    for (const line of lines) {
+      page.drawText(line, {
+        x: padding * 1.5,
+        y: textY,
+        size: fontSize,
+        font,
         color: textColor,
       })
-      contentY -= contentLineHeight
+      textY -= lineHeight
     }
   }
 
@@ -539,7 +530,7 @@ async function drawStoryTemplate(
       x,
       y: 25,
       size: dotRadius,
-      color: i === slideNumber ? whiteColor : rgb(0.7, 0.7, 0.7),
+      color: i === slideNumber ? (isTitleSlide ? whiteColor : primaryColor) : rgb(0.7, 0.7, 0.7),
     })
   }
 }
@@ -556,8 +547,8 @@ async function drawStoryTemplate(
  * @example
  * ```typescript
  * const slides: CarouselSlide[] = [
- *   { id: "1", title: "Welcome", content: "Introduction slide", order: 0 },
- *   { id: "2", title: "Key Points", content: "Main content here", order: 1 },
+ *   { id: "1", title: "Welcome", content: "", order: 0, slideType: "title" },
+ *   { id: "2", title: "", content: "Main content here", order: 1, slideType: "content" },
  * ]
  *
  * const brandKit: BrandKit = {
@@ -582,12 +573,12 @@ export async function exportCarouselToPDF(
     slides,
     brandKit,
     template,
-    format = "square",
+    format = 'square',
   } = options
 
   // Validate inputs
   if (!slides || slides.length === 0) {
-    throw new Error("At least one slide is required to export a PDF")
+    throw new Error('At least one slide is required to export a PDF')
   }
 
   // Sort slides by order
@@ -613,16 +604,16 @@ export async function exportCarouselToPDF(
 
     // Apply template style
     switch (template) {
-      case "bold":
+      case 'bold':
         await drawBoldTemplate(page, slide, slideNumber, totalSlides, brandKit, fonts)
         break
-      case "minimalist":
+      case 'minimalist':
         await drawMinimalistTemplate(page, slide, slideNumber, totalSlides, brandKit, fonts)
         break
-      case "data":
+      case 'data':
         await drawDataTemplate(page, slide, slideNumber, totalSlides, brandKit, fonts)
         break
-      case "story":
+      case 'story':
         await drawStoryTemplate(page, slide, slideNumber, totalSlides, brandKit, fonts)
         break
       default:
@@ -639,7 +630,7 @@ export async function exportCarouselToPDF(
   view.set(pdfBytes)
 
   // Convert to Blob
-  return new Blob([arrayBuffer], { type: "application/pdf" })
+  return new Blob([arrayBuffer], { type: 'application/pdf' })
 }
 
 /**
@@ -657,15 +648,15 @@ export async function exportCarouselToPDF(
  * downloadPDF(pdfBlob, "my-linkedin-carousel.pdf")
  * ```
  */
-export function downloadPDF(blob: Blob, filename: string = "carousel.pdf"): void {
+export function downloadPDF(blob: Blob, filename: string = 'carousel.pdf'): void {
   // Ensure filename has .pdf extension
-  const finalFilename = filename.endsWith(".pdf") ? filename : `${filename}.pdf`
+  const finalFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`
 
   // Create object URL for the blob
   const url = URL.createObjectURL(blob)
 
   // Create temporary anchor element
-  const link = document.createElement("a")
+  const link = document.createElement('a')
   link.href = url
   link.download = finalFilename
 

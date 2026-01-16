@@ -724,6 +724,93 @@ export function TeamSkeleton() {
 }
 
 /**
+ * Swipe Page Skeleton
+ * Displays: Centered swipe card stack with action buttons
+ */
+export function SwipeSkeleton() {
+  return (
+    <div className="flex flex-col items-center gap-6 p-4 md:p-6 animate-in fade-in duration-300">
+      {/* Filter Bar */}
+      <div className="flex w-full max-w-md items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-4" />
+          <Skeleton className="h-10 w-[180px]" />
+        </div>
+        <Skeleton className="h-6 w-24 rounded-full" />
+      </div>
+
+      {/* Card Stack */}
+      <div className="relative h-[400px] w-full max-w-md">
+        {/* Background cards */}
+        <div className="absolute inset-0 scale-[0.94] translate-y-4">
+          <Skeleton className="h-full w-full rounded-xl opacity-30" />
+        </div>
+        <div className="absolute inset-0 scale-[0.97] translate-y-2">
+          <Skeleton className="h-full w-full rounded-xl opacity-50" />
+        </div>
+        {/* Top card */}
+        <Card className="absolute inset-0">
+          <CardContent className="flex h-full flex-col p-5">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-6 w-24 rounded-full" />
+              <Skeleton className="h-6 w-32 rounded-full" />
+            </div>
+            {/* Content */}
+            <div className="mt-4 flex-1 space-y-3">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+            </div>
+            {/* Footer */}
+            <div className="mt-4 pt-3 border-t">
+              <Skeleton className="h-4 w-32 mx-auto" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center gap-4">
+        <Skeleton className="size-11 md:size-10 rounded-full" />
+        <Skeleton className="size-11 md:size-10 rounded-full" />
+        <Skeleton className="h-10 w-32 rounded-full" />
+      </div>
+
+      {/* Keyboard Hint */}
+      <Skeleton className="h-4 w-48" />
+
+      {/* Stats Card */}
+      <Card className="w-full max-w-md">
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4" />
+            <Skeleton className="h-5 w-32" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-12" />
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="text-center space-y-1">
+                <Skeleton className="h-6 w-8 mx-auto" />
+                <Skeleton className="h-3 w-12 mx-auto" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+/**
  * Settings Page Skeleton
  * Displays: Multi-tab settings interface
  */

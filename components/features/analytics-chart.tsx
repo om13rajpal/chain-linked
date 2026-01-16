@@ -1,8 +1,15 @@
 "use client"
 
+/**
+ * Analytics Chart Component
+ * @description Enhanced performance chart with animations and beautiful gradients
+ * @module components/features/analytics-chart
+ */
+
 import * as React from "react"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { IconChartLine } from "@tabler/icons-react"
+import { motion } from "framer-motion"
+import { IconChartLine, IconTrendingUp } from "@tabler/icons-react"
 
 import {
   Card,
@@ -25,16 +32,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Skeleton } from "@/components/ui/skeleton"
+import { fadeSlideUpVariants } from '@/lib/animations'
 
 /**
  * Data point for LinkedIn analytics chart
  */
 interface AnalyticsDataPoint {
-  /** Date string in ISO format (YYYY-MM-DD) */
   date: string
-  /** Number of impressions for this date */
   impressions: number
-  /** Number of engagements for this date */
   engagements: number
 }
 
@@ -42,25 +48,12 @@ interface AnalyticsDataPoint {
  * Props for the AnalyticsChart component
  */
 export interface AnalyticsChartProps {
-  /**
-   * Analytics data array containing date, impressions, and engagements.
-   * If not provided or empty, an empty state will be shown.
-   */
   data?: AnalyticsDataPoint[]
-  /**
-   * Whether the component is in a loading state
-   */
   isLoading?: boolean
 }
 
-/**
- * Available time range options for filtering chart data
- */
 type TimeRange = "7d" | "30d" | "90d"
 
-/**
- * Chart configuration for Recharts styling
- */
 const chartConfig = {
   impressions: {
     label: "Impressions",
@@ -73,13 +66,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 /**
- * @deprecated This function generates mock data and should not be used in production.
- * Kept for backward compatibility only.
- *
- * Generates sample analytics data for demonstration purposes.
- * Creates 90 days of data with realistic impression and engagement patterns.
- *
- * @returns Array of analytics data points spanning 90 days
+ * @deprecated Mock data generator - use real data in production
  */
 export function generateSampleData(): AnalyticsDataPoint[] {
   const data: AnalyticsDataPoint[] = []
@@ -89,20 +76,16 @@ export function generateSampleData(): AnalyticsDataPoint[] {
     const date = new Date(today)
     date.setDate(date.getDate() - i)
 
-    // Generate realistic-looking data with some variation
-    // Weekdays tend to have higher engagement
     const dayOfWeek = date.getDay()
     const isWeekday = dayOfWeek > 0 && dayOfWeek < 6
     const baseMultiplier = isWeekday ? 1.2 : 0.8
 
-    // Add some randomness and trending growth
-    const trendFactor = 1 + (90 - i) * 0.005 // Slight upward trend
-    const randomFactor = 0.7 + Math.random() * 0.6 // Random variation
+    const trendFactor = 1 + (90 - i) * 0.005
+    const randomFactor = 0.7 + Math.random() * 0.6
 
     const impressions = Math.round(
       1000 * baseMultiplier * trendFactor * randomFactor
     )
-    // Engagement rate typically 2-8% of impressions
     const engagementRate = 0.02 + Math.random() * 0.06
     const engagements = Math.round(impressions * engagementRate)
 
@@ -117,29 +100,107 @@ export function generateSampleData(): AnalyticsDataPoint[] {
 }
 
 /**
- * Empty state component for when no analytics data is available
+ * Loading skeleton for chart
  */
-function EmptyState() {
+function ChartSkeleton() {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="rounded-full bg-muted p-4 mb-4">
-        <IconChartLine className="size-8 text-muted-foreground" />
+    <div className="space-y-4 p-6">
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <Skeleton className="h-9 w-32" />
       </div>
-      <h3 className="font-medium text-lg">No analytics data yet</h3>
-      <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-        Analytics will appear here once your LinkedIn activity is captured via the extension.
-      </p>
+      <Skeleton className="h-[250px] w-full rounded-lg" />
     </div>
   )
 }
 
 /**
- * Filters data based on selected time range
- *
- * @param data - Full analytics data array
- * @param timeRange - Selected time range (7d, 30d, or 90d)
- * @returns Filtered data array
+ * Empty state with animation
  */
+function EmptyState() {
+  return (
+    <motion.div
+      className="flex flex-col items-center justify-center py-12 text-center"
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <motion.div
+        className="mb-4 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 p-4"
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ delay: 0.1, duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+      >
+        <IconChartLine className="size-8 text-primary" />
+      </motion.div>
+      <motion.h3
+        className="text-lg font-medium"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2, duration: 0.4 }}
+      >
+        No analytics data yet
+      </motion.h3>
+      <motion.p
+        className="mt-1 max-w-sm text-sm text-muted-foreground"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, duration: 0.4 }}
+      >
+        Analytics will appear here once your LinkedIn activity is captured via the extension.
+      </motion.p>
+    </motion.div>
+  )
+}
+
+/**
+ * Summary stats displayed above the chart
+ */
+function ChartSummary({ data, timeRange }: { data: AnalyticsDataPoint[], timeRange: TimeRange }) {
+  const totalImpressions = data.reduce((sum, d) => sum + d.impressions, 0)
+  const totalEngagements = data.reduce((sum, d) => sum + d.engagements, 0)
+  const avgEngagementRate = totalImpressions > 0
+    ? ((totalEngagements / totalImpressions) * 100).toFixed(2)
+    : '0.00'
+
+  const rangeLabels = {
+    '7d': 'Last 7 days',
+    '30d': 'Last 30 days',
+    '90d': 'Last 90 days',
+  }
+
+  return (
+    <motion.div
+      className="grid grid-cols-3 gap-4 border-b border-border/50 px-6 py-4"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1, duration: 0.4 }}
+    >
+      <div>
+        <p className="text-xs font-medium text-muted-foreground">Total Impressions</p>
+        <p className="text-lg font-bold tabular-nums text-primary">
+          {totalImpressions.toLocaleString()}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-medium text-muted-foreground">Total Engagements</p>
+        <p className="text-lg font-bold tabular-nums text-secondary">
+          {totalEngagements.toLocaleString()}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-medium text-muted-foreground">Avg. Rate</p>
+        <p className="text-lg font-bold tabular-nums">
+          {avgEngagementRate}%
+        </p>
+      </div>
+    </motion.div>
+  )
+}
+
 function filterDataByTimeRange(
   data: AnalyticsDataPoint[],
   timeRange: TimeRange
@@ -148,12 +209,6 @@ function filterDataByTimeRange(
   return data.slice(-days)
 }
 
-/**
- * Formats a date string for display in tooltips
- *
- * @param dateString - ISO date string (YYYY-MM-DD)
- * @returns Formatted date string (e.g., "Jan 15, 2024")
- */
 function formatDate(dateString: string): string {
   const date = new Date(dateString)
   return date.toLocaleDateString("en-US", {
@@ -163,13 +218,6 @@ function formatDate(dateString: string): string {
   })
 }
 
-/**
- * Formats a date for X-axis display
- *
- * @param dateString - ISO date string (YYYY-MM-DD)
- * @param timeRange - Current time range selection
- * @returns Formatted date string appropriate for the time range
- */
 function formatAxisDate(dateString: string, timeRange: TimeRange): string {
   const date = new Date(dateString)
   if (timeRange === "7d") {
@@ -180,190 +228,250 @@ function formatAxisDate(dateString: string, timeRange: TimeRange): string {
 
 /**
  * LinkedIn Analytics Chart Component
- *
- * Displays LinkedIn performance metrics (impressions and engagements) over time
- * using an interactive area chart. Features time range selection with responsive
- * design - toggle group on desktop and select dropdown on mobile.
- *
- * @example
- * ```tsx
- * // With custom data
- * <AnalyticsChart data={myAnalyticsData} />
- *
- * // With sample data (for demos)
- * <AnalyticsChart />
- * ```
- *
- * @param props - Component props
- * @returns React component
+ * @description Displays LinkedIn performance metrics with beautiful animations
  */
 export function AnalyticsChart({ data, isLoading = false }: AnalyticsChartProps) {
   const [timeRange, setTimeRange] = React.useState<TimeRange>("30d")
 
-  // Filter data by time range - use empty array if no data
   const chartData = React.useMemo(() => {
     if (!data || data.length === 0) return []
     return filterDataByTimeRange(data, timeRange)
   }, [data, timeRange])
 
-  // Check if we have any data to show
   const hasData = data && data.length > 0
 
-  // Calculate tick interval for X-axis based on time range
   const tickInterval = React.useMemo(() => {
     switch (timeRange) {
       case "7d":
-        return 1 // Show every day
+        return 1
       case "30d":
-        return 4 // Show roughly weekly
+        return 4
       case "90d":
-        return 13 // Show roughly bi-weekly
+        return 13
       default:
         return 4
     }
   }, [timeRange])
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">
-        <div className="flex flex-1 flex-col justify-center gap-1 px-6 py-5 sm:py-6">
-          <CardTitle>Performance Overview</CardTitle>
-          <CardDescription>
-            Track your LinkedIn impressions and engagement metrics
-          </CardDescription>
-        </div>
-        <div className="flex items-center px-6 py-4">
-          {/* Desktop: Toggle Group */}
-          <ToggleGroup
-            type="single"
-            value={timeRange}
-            onValueChange={(value) => {
-              if (value) setTimeRange(value as TimeRange)
-            }}
-            variant="outline"
-            className="hidden sm:flex"
-          >
-            <ToggleGroupItem value="7d" aria-label="Last 7 days">
-              7D
-            </ToggleGroupItem>
-            <ToggleGroupItem value="30d" aria-label="Last 30 days">
-              30D
-            </ToggleGroupItem>
-            <ToggleGroupItem value="90d" aria-label="Last 90 days">
-              90D
-            </ToggleGroupItem>
-          </ToggleGroup>
+  if (isLoading) {
+    return (
+      <Card className="overflow-hidden">
+        <ChartSkeleton />
+      </Card>
+    )
+  }
 
-          {/* Mobile: Select Dropdown */}
-          <Select
-            value={timeRange}
-            onValueChange={(value) => setTimeRange(value as TimeRange)}
-          >
-            <SelectTrigger className="sm:hidden" aria-label="Select time range">
-              <SelectValue placeholder="Select range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        {!hasData ? (
-          <EmptyState />
-        ) : (
-          <ChartContainer
-            config={chartConfig}
-            className="aspect-auto h-[250px] w-full"
-          >
-            <AreaChart
-              data={chartData}
-              margin={{
-                top: 10,
-                right: 10,
-                left: 0,
-                bottom: 0,
+  return (
+    <motion.div
+      variants={fadeSlideUpVariants}
+      initial="initial"
+      animate="animate"
+    >
+      <Card className="group relative overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-primary/5 transition-all duration-300 hover:border-primary/30 hover:shadow-lg dark:from-card dark:via-card dark:to-primary/10">
+        {/* Subtle glow effect */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+        <CardHeader className="relative flex flex-col items-stretch space-y-0 border-b border-border/50 p-0 sm:flex-row">
+          <div className="flex flex-1 flex-col justify-center gap-1 px-6 py-5 sm:py-6">
+            <CardTitle className="flex items-center gap-2">
+              <div className="rounded-lg bg-primary/10 p-1.5">
+                <IconTrendingUp className="size-4 text-primary" />
+              </div>
+              Performance Overview
+            </CardTitle>
+            <CardDescription>
+              Track your LinkedIn impressions and engagement metrics
+            </CardDescription>
+          </div>
+          <div className="flex items-center px-6 py-4">
+            {/* Desktop: Toggle Group */}
+            <ToggleGroup
+              type="single"
+              value={timeRange}
+              onValueChange={(value) => {
+                if (value) setTimeRange(value as TimeRange)
               }}
+              variant="outline"
+              className="hidden sm:flex"
             >
-              <defs>
-                {/* Gradient for Impressions */}
-                <linearGradient id="fillImpressions" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor="var(--color-impressions)"
-                    stopOpacity={0.8}
+              <ToggleGroupItem
+                value="7d"
+                aria-label="Last 7 days"
+                className="transition-all data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+              >
+                7D
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="30d"
+                aria-label="Last 30 days"
+                className="transition-all data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+              >
+                30D
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="90d"
+                aria-label="Last 90 days"
+                className="transition-all data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+              >
+                90D
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            {/* Mobile: Select Dropdown */}
+            <Select
+              value={timeRange}
+              onValueChange={(value) => setTimeRange(value as TimeRange)}
+            >
+              <SelectTrigger className="sm:hidden" aria-label="Select time range">
+                <SelectValue placeholder="Select range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+
+        {/* Summary Stats */}
+        {hasData && <ChartSummary data={chartData} timeRange={timeRange} />}
+
+        <CardContent className="relative px-2 pt-4 sm:px-6 sm:pt-6">
+          {!hasData ? (
+            <EmptyState />
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.6 }}
+            >
+              <ChartContainer
+                config={chartConfig}
+                className="aspect-auto h-[250px] w-full"
+              >
+                <AreaChart
+                  data={chartData}
+                  margin={{
+                    top: 10,
+                    right: 10,
+                    left: 0,
+                    bottom: 0,
+                  }}
+                >
+                  <defs>
+                    {/* Enhanced gradient for Impressions */}
+                    <linearGradient id="fillImpressions" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="0%"
+                        stopColor="var(--color-impressions)"
+                        stopOpacity={0.5}
+                      />
+                      <stop
+                        offset="50%"
+                        stopColor="var(--color-impressions)"
+                        stopOpacity={0.2}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--color-impressions)"
+                        stopOpacity={0.05}
+                      />
+                    </linearGradient>
+                    {/* Enhanced gradient for Engagements */}
+                    <linearGradient id="fillEngagements" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="0%"
+                        stopColor="var(--color-engagements)"
+                        stopOpacity={0.5}
+                      />
+                      <stop
+                        offset="50%"
+                        stopColor="var(--color-engagements)"
+                        stopOpacity={0.2}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--color-engagements)"
+                        stopOpacity={0.05}
+                      />
+                    </linearGradient>
+                    {/* Glow filter for lines */}
+                    <filter id="glow">
+                      <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                      <feMerge>
+                        <feMergeNode in="coloredBlur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
+                    strokeOpacity={0.5}
                   />
-                  <stop
-                    offset="95%"
-                    stopColor="var(--color-impressions)"
-                    stopOpacity={0.1}
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={32}
+                    interval={tickInterval}
+                    tickFormatter={(value) => formatAxisDate(value, timeRange)}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                   />
-                </linearGradient>
-                {/* Gradient for Engagements */}
-                <linearGradient id="fillEngagements" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor="var(--color-engagements)"
-                    stopOpacity={0.8}
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tickFormatter={(value) =>
+                      value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value
+                    }
+                    width={48}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                   />
-                  <stop
-                    offset="95%"
-                    stopColor="var(--color-engagements)"
-                    stopOpacity={0.1}
+                  <ChartTooltip
+                    cursor={{
+                      stroke: 'hsl(var(--primary))',
+                      strokeWidth: 1,
+                      strokeDasharray: '4 4',
+                    }}
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(value) => formatDate(value as string)}
+                        indicator="dot"
+                        className="rounded-xl border-border/50 bg-card/95 backdrop-blur-sm"
+                      />
+                    }
                   />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                minTickGap={32}
-                interval={tickInterval}
-                tickFormatter={(value) => formatAxisDate(value, timeRange)}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                tickFormatter={(value) =>
-                  value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value
-                }
-                width={48}
-              />
-              <ChartTooltip
-                cursor={false}
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(value) => formatDate(value as string)}
-                    indicator="dot"
+                  <Area
+                    dataKey="impressions"
+                    type="monotone"
+                    fill="url(#fillImpressions)"
+                    stroke="var(--color-impressions)"
+                    strokeWidth={2.5}
+                    stackId="a"
+                    animationDuration={1200}
+                    animationEasing="ease-out"
                   />
-                }
-              />
-              <Area
-                dataKey="impressions"
-                type="monotone"
-                fill="url(#fillImpressions)"
-                stroke="var(--color-impressions)"
-                strokeWidth={2}
-                stackId="a"
-              />
-              <Area
-                dataKey="engagements"
-                type="monotone"
-                fill="url(#fillEngagements)"
-                stroke="var(--color-engagements)"
-                strokeWidth={2}
-                stackId="b"
-              />
-            </AreaChart>
-          </ChartContainer>
-        )}
-      </CardContent>
-    </Card>
+                  <Area
+                    dataKey="engagements"
+                    type="monotone"
+                    fill="url(#fillEngagements)"
+                    stroke="var(--color-engagements)"
+                    strokeWidth={2.5}
+                    stackId="b"
+                    animationDuration={1200}
+                    animationEasing="ease-out"
+                  />
+                </AreaChart>
+              </ChartContainer>
+            </motion.div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 

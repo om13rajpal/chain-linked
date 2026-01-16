@@ -1,0 +1,163 @@
+/**
+ * LinkedIn Post API Route Handler
+ * @description Handles creating posts on LinkedIn
+ * @module app/api/linkedin/post
+ */
+
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import {
+  createLinkedInClient,
+  createPost,
+  type LinkedInTokenData,
+  type CreatePostRequest,
+  type LinkedInVisibility,
+} from '@/lib/linkedin'
+
+/**
+ * Request body for posting to LinkedIn
+ */
+interface PostRequestBody {
+  content: string
+  visibility?: LinkedInVisibility
+  mediaUrls?: string[]
+  scheduledPostId?: string
+}
+
+/**
+ * POST - Create a new LinkedIn post
+ * @param request - Post content and options
+ * @returns Post result with LinkedIn post URN
+ */
+export async function POST(request: Request) {
+  const supabase = await createClient()
+
+  // Verify user authentication
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Please log in to post to LinkedIn' },
+      { status: 401 }
+    )
+  }
+
+  // Parse request body
+  let body: PostRequestBody
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid request body' },
+      { status: 400 }
+    )
+  }
+
+  const { content, visibility = 'PUBLIC', mediaUrls, scheduledPostId } = body
+
+  // Validate content
+  if (!content || content.trim().length === 0) {
+    return NextResponse.json(
+      { error: 'Content is required' },
+      { status: 400 }
+    )
+  }
+
+  if (content.length > 3000) {
+    return NextResponse.json(
+      { error: 'Content exceeds maximum length of 3000 characters' },
+      { status: 400 }
+    )
+  }
+
+  // Get LinkedIn tokens for user
+  const { data: tokenData, error: tokenError } = await supabase
+    .from('linkedin_tokens')
+    .select('*')
+    .eq('user_id', user.id)
+    .single()
+
+  if (tokenError || !tokenData) {
+    return NextResponse.json(
+      {
+        error: 'LinkedIn not connected',
+        message: 'Please connect your LinkedIn account in settings',
+      },
+      { status: 403 }
+    )
+  }
+
+  // Create LinkedIn API client with token refresh callback
+  const client = createLinkedInClient(
+    tokenData as LinkedInTokenData,
+    async (newTokenData) => {
+      await supabase
+        .from('linkedin_tokens')
+        .update(newTokenData)
+        .eq('user_id', user.id)
+    }
+  )
+
+  // Create the post request
+  const postRequest: CreatePostRequest = {
+    content,
+    visibility,
+    mediaUrls,
+  }
+
+  // Post to LinkedIn
+  const result = await createPost(client, postRequest)
+
+  if (!result.success) {
+    // If posting fails, update scheduled post status if applicable
+    if (scheduledPostId) {
+      await supabase
+        .from('scheduled_posts')
+        .update({
+          status: 'failed',
+          error_message: result.error,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', scheduledPostId)
+        .eq('user_id', user.id)
+    }
+
+    return NextResponse.json(
+      { error: result.error || 'Failed to post to LinkedIn' },
+      { status: 500 }
+    )
+  }
+
+  // Update scheduled post if this was a scheduled post
+  if (scheduledPostId) {
+    await supabase
+      .from('scheduled_posts')
+      .update({
+        status: 'posted',
+        linkedin_post_id: result.linkedinPostUrn,
+        posted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', scheduledPostId)
+      .eq('user_id', user.id)
+  }
+
+  // Log the post in my_posts table for tracking
+  if (result.linkedinPostUrn) {
+    await supabase
+      .from('my_posts')
+      .insert({
+        user_id: user.id,
+        activity_urn: result.linkedinPostUrn,
+        content,
+        posted_at: new Date().toISOString(),
+      })
+  }
+
+  return NextResponse.json({
+    success: true,
+    postId: result.postId,
+    linkedinPostUrn: result.linkedinPostUrn,
+    message: 'Post published successfully',
+  })
+}

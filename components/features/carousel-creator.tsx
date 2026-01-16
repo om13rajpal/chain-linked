@@ -1,7 +1,12 @@
 "use client"
 
-import Image from "next/image"
+/**
+ * Carousel Creator Component
+ * @description A carousel creator for building LinkedIn PDF carousel posts
+ * @module components/features/carousel-creator
+ */
 
+import Image from "next/image"
 import * as React from "react"
 import {
   IconChevronLeft,
@@ -12,6 +17,7 @@ import {
   IconPlus,
   IconDeviceFloppy,
   IconTrash,
+  IconLayoutGrid,
 } from "@tabler/icons-react"
 
 import { cn } from "@/lib/utils"
@@ -33,32 +39,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
-/**
- * Represents a single slide in a carousel
- */
-export interface CarouselSlide {
-  /** Unique identifier for the slide */
-  id: string
-  /** Text content of the slide */
-  content: string
-  /** Type of slide determining its purpose and styling */
-  type: "title" | "content" | "stat" | "cta"
-}
-
-/**
- * Brand kit configuration for carousel styling
- */
-export interface BrandKit {
-  /** Primary brand color (hex format) */
-  primaryColor: string
-  /** Secondary brand color (hex format) */
-  secondaryColor: string
-  /** Font family name */
-  fontFamily: string
-  /** Optional logo URL */
-  logoUrl?: string
-}
+import { useCarousel } from "@/hooks/use-carousel"
+import type {
+  CarouselSlide,
+  CarouselBrandKit,
+  CarouselTemplateType,
+} from "@/types/carousel"
+import {
+  CAROUSEL_TEMPLATES,
+  DEFAULT_BRAND_KIT,
+  DEFAULT_CAROUSEL_SLIDES,
+} from "@/types/carousel"
 
 /**
  * Props for the CarouselCreator component
@@ -67,88 +58,9 @@ export interface CarouselCreatorProps {
   /** Initial slides to populate the editor with */
   initialSlides?: CarouselSlide[]
   /** Brand kit for styling the carousel */
-  brandKit?: BrandKit
-  /** Callback fired when export button is clicked */
-  onExport?: (slides: CarouselSlide[], template: string) => Promise<void>
-  /** Callback fired when save draft button is clicked */
-  onSave?: (slides: CarouselSlide[]) => void
-}
-
-/**
- * Available carousel template types
- */
-type TemplateType = "bold" | "minimalist" | "data" | "story"
-
-/**
- * Template configuration with display name and description
- */
-interface TemplateConfig {
-  name: string
-  description: string
-}
-
-/** Template configurations for the selector */
-const TEMPLATES: Record<TemplateType, TemplateConfig> = {
-  bold: {
-    name: "Bold",
-    description: "Large text, strong colors",
-  },
-  minimalist: {
-    name: "Minimalist",
-    description: "Clean, lots of whitespace",
-  },
-  data: {
-    name: "Data-Focused",
-    description: "Numbers prominent",
-  },
-  story: {
-    name: "Story-Style",
-    description: "Narrative flow",
-  },
-}
-
-/** Default brand kit colors */
-const DEFAULT_BRAND_KIT: BrandKit = {
-  primaryColor: "#0077B5",
-  secondaryColor: "#00A0DC",
-  fontFamily: "Inter, sans-serif",
-}
-
-/** Default slides for new carousels */
-const DEFAULT_SLIDES: CarouselSlide[] = [
-  {
-    id: "slide-1",
-    content: "5 Tips for LinkedIn Success",
-    type: "title",
-  },
-  {
-    id: "slide-2",
-    content: "Tip 1: Post consistently to build your audience",
-    type: "content",
-  },
-  {
-    id: "slide-3",
-    content: "78% of professionals say LinkedIn helps them grow",
-    type: "stat",
-  },
-  {
-    id: "slide-4",
-    content: "Tip 2: Engage with your network daily",
-    type: "content",
-  },
-  {
-    id: "slide-5",
-    content: "Follow for more tips! Link in comments",
-    type: "cta",
-  },
-]
-
-/**
- * Generates a unique ID for new slides
- * @returns A unique string ID
- */
-function generateSlideId(): string {
-  return `slide-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  brandKit?: CarouselBrandKit
+  /** Initial template selection */
+  initialTemplate?: CarouselTemplateType
 }
 
 /**
@@ -160,9 +72,9 @@ function generateSlideId(): string {
  * @returns CSS style object for the slide
  */
 function getTemplateStyles(
-  template: TemplateType,
+  template: CarouselTemplateType,
   slideType: CarouselSlide["type"],
-  brandKit: BrandKit,
+  brandKit: CarouselBrandKit,
   brandKitApplied: boolean
 ): React.CSSProperties {
   const primaryColor = brandKitApplied ? brandKit.primaryColor : "#0077B5"
@@ -189,8 +101,8 @@ function getTemplateStyles(
         ...baseStyles,
         backgroundColor: "#fafafa",
         color: "#333333",
-        fontSize: slideType === "title" ? "1.5rem" : "1rem",
-        fontWeight: slideType === "title" ? 600 : 400,
+        fontSize: slideType === "title" ? "1.5rem" : slideType === "stat" ? "1.75rem" : "1rem",
+        fontWeight: slideType === "title" || slideType === "stat" ? 600 : 400,
         padding: "3rem 2rem",
         textAlign: "center",
         borderLeft: slideType === "title" || slideType === "cta" ? `4px solid ${primaryColor}` : "none",
@@ -214,11 +126,12 @@ function getTemplateStyles(
             ? `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`
             : "#ffffff",
         color: slideType === "title" ? "#ffffff" : "#333333",
-        fontSize: slideType === "title" ? "1.625rem" : "1.125rem",
-        fontWeight: slideType === "title" ? 600 : 400,
+        fontSize: slideType === "title" ? "1.625rem" : slideType === "stat" ? "2rem" : "1.125rem",
+        fontWeight: slideType === "title" || slideType === "stat" ? 600 : 400,
         padding: "2rem",
         textAlign: slideType === "cta" ? "center" : "left",
         lineHeight: 1.6,
+        borderLeft: slideType !== "title" ? `4px solid ${primaryColor}` : "none",
       }
     default:
       return baseStyles
@@ -231,7 +144,7 @@ function getTemplateStyles(
  * @param slideType - The type of slide
  * @returns Tailwind CSS class string
  */
-function getTemplateClasses(template: TemplateType, slideType: CarouselSlide["type"]): string {
+function getTemplateClasses(template: CarouselTemplateType, slideType: CarouselSlide["type"]): string {
   const baseClasses = "flex items-center justify-center transition-all duration-300"
 
   switch (template) {
@@ -261,21 +174,17 @@ function getTemplateClasses(template: TemplateType, slideType: CarouselSlide["ty
  * - Template selection (Bold, Minimalist, Data-Focused, Story-Style)
  * - Brand kit auto-application with preview
  * - Visual preview of carousel slides with navigation
- * - Export and save draft functionality
+ * - Export to PDF and save draft functionality
+ *
+ * @param props - Component props
+ * @returns Carousel creator JSX element
  *
  * @example
  * ```tsx
  * // Basic usage
- * <CarouselCreator
- *   onExport={async (slides, template) => {
- *     await generatePDF(slides, template)
- *   }}
- *   onSave={(slides) => {
- *     saveDraft(slides)
- *   }}
- * />
+ * <CarouselCreator />
  *
- * // With brand kit and initial slides
+ * // With initial slides and brand kit
  * <CarouselCreator
  *   initialSlides={mySlides}
  *   brandKit={{
@@ -289,131 +198,67 @@ function getTemplateClasses(template: TemplateType, slideType: CarouselSlide["ty
  */
 export function CarouselCreator({
   initialSlides,
-  brandKit = DEFAULT_BRAND_KIT,
-  onExport,
-  onSave,
+  brandKit: initialBrandKit,
+  initialTemplate = "bold",
 }: CarouselCreatorProps) {
-  const [slides, setSlides] = React.useState<CarouselSlide[]>(
-    initialSlides ?? DEFAULT_SLIDES
-  )
-  const [selectedTemplate, setSelectedTemplate] = React.useState<TemplateType>("bold")
-  const [currentSlideIndex, setCurrentSlideIndex] = React.useState(0)
-  const [brandKitApplied, setBrandKitApplied] = React.useState(false)
-  const [isExporting, setIsExporting] = React.useState(false)
-  const [isSaving, setIsSaving] = React.useState(false)
-
-  /**
-   * Adds a new slide to the carousel
-   */
-  const handleAddSlide = () => {
-    const newSlide: CarouselSlide = {
-      id: generateSlideId(),
-      content: "",
-      type: "content",
-    }
-    setSlides((prev) => [...prev, newSlide])
-    setCurrentSlideIndex(slides.length)
-  }
-
-  /**
-   * Removes a slide from the carousel
-   * @param slideId - The ID of the slide to remove
-   */
-  const handleRemoveSlide = (slideId: string) => {
-    if (slides.length <= 1) return // Keep at least one slide
-
-    const slideIndex = slides.findIndex((s) => s.id === slideId)
-    setSlides((prev) => prev.filter((s) => s.id !== slideId))
-
-    // Adjust current slide index if necessary
-    if (currentSlideIndex >= slides.length - 1) {
-      setCurrentSlideIndex(Math.max(0, slides.length - 2))
-    } else if (slideIndex <= currentSlideIndex && currentSlideIndex > 0) {
-      setCurrentSlideIndex(currentSlideIndex - 1)
-    }
-  }
-
-  /**
-   * Updates a slide's content
-   * @param slideId - The ID of the slide to update
-   * @param content - The new content
-   */
-  const handleContentChange = (slideId: string, content: string) => {
-    setSlides((prev) =>
-      prev.map((slide) =>
-        slide.id === slideId ? { ...slide, content } : slide
-      )
-    )
-  }
-
-  /**
-   * Updates a slide's type
-   * @param slideId - The ID of the slide to update
-   * @param type - The new slide type
-   */
-  const handleTypeChange = (slideId: string, type: CarouselSlide["type"]) => {
-    setSlides((prev) =>
-      prev.map((slide) =>
-        slide.id === slideId ? { ...slide, type } : slide
-      )
-    )
-  }
-
-  /**
-   * Navigates to the previous slide in the preview
-   */
-  const handlePreviousSlide = () => {
-    setCurrentSlideIndex((prev) => Math.max(0, prev - 1))
-  }
-
-  /**
-   * Navigates to the next slide in the preview
-   */
-  const handleNextSlide = () => {
-    setCurrentSlideIndex((prev) => Math.min(slides.length - 1, prev + 1))
-  }
+  const {
+    slides,
+    selectedTemplate,
+    currentSlideIndex,
+    currentSlide,
+    brandKit,
+    brandKitApplied,
+    isExporting,
+    isSaving,
+    addSlide,
+    removeSlide,
+    updateSlideContent,
+    updateSlideType,
+    setTemplate,
+    goToPreviousSlide,
+    goToNextSlide,
+    goToSlide,
+    toggleBrandKit,
+    exportToPDF,
+    saveDraft,
+  } = useCarousel({
+    initialSlides: initialSlides ?? DEFAULT_CAROUSEL_SLIDES,
+    initialBrandKit: initialBrandKit ?? DEFAULT_BRAND_KIT,
+    initialTemplate,
+  })
 
   /**
    * Handles the export button click
    */
   const handleExport = async () => {
-    if (!onExport) return
-
-    setIsExporting(true)
-    try {
-      await onExport(slides, selectedTemplate)
-    } catch (error) {
-      console.error("Failed to export carousel:", error)
-    } finally {
-      setIsExporting(false)
-    }
+    await exportToPDF("square", "linkedin-carousel.pdf")
   }
 
   /**
    * Handles the save draft button click
    */
-  const handleSave = () => {
-    if (!onSave) return
-
-    setIsSaving(true)
-    try {
-      onSave(slides)
-    } finally {
-      setIsSaving(false)
-    }
+  const handleSave = async () => {
+    await saveDraft()
   }
-
-  /**
-   * Toggles brand kit application
-   */
-  const handleToggleBrandKit = () => {
-    setBrandKitApplied((prev) => !prev)
-  }
-
-  const currentSlide = slides[currentSlideIndex]
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Create Carousel</h2>
+          <p className="text-muted-foreground text-sm">
+            Design multi-slide carousels for LinkedIn
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <IconLayoutGrid className="text-muted-foreground size-5" />
+          <span className="text-muted-foreground text-sm">
+            {slides.length} slide{slides.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
+
       {/* Main Editor and Preview Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Slide Editor Column */}
@@ -431,13 +276,13 @@ export function CarouselCreator({
               <Label htmlFor="template-select">Template</Label>
               <Select
                 value={selectedTemplate}
-                onValueChange={(value) => setSelectedTemplate(value as TemplateType)}
+                onValueChange={(value) => setTemplate(value as CarouselTemplateType)}
               >
                 <SelectTrigger id="template-select" className="w-full">
                   <SelectValue placeholder="Select a template" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.entries(TEMPLATES) as [TemplateType, TemplateConfig][]).map(
+                  {(Object.entries(CAROUSEL_TEMPLATES) as [CarouselTemplateType, { name: string; description: string }][]).map(
                     ([key, template]) => (
                       <SelectItem key={key} value={key}>
                         <div className="flex flex-col">
@@ -456,7 +301,7 @@ export function CarouselCreator({
             {/* Slides List */}
             <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
               <Label>Slides ({slides.length})</Label>
-              <div className="space-y-3 pr-1">
+              <div className="max-h-[400px] space-y-3 overflow-y-auto pr-1">
                 {slides.map((slide, index) => (
                   <div
                     key={slide.id}
@@ -466,12 +311,12 @@ export function CarouselCreator({
                         ? "border-primary bg-primary/5"
                         : "hover:border-muted-foreground/30"
                     )}
-                    onClick={() => setCurrentSlideIndex(index)}
+                    onClick={() => goToSlide(index)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
-                        setCurrentSlideIndex(index)
+                        goToSlide(index)
                       }
                     }}
                     aria-label={`Select slide ${index + 1}`}
@@ -486,7 +331,7 @@ export function CarouselCreator({
                     <div className="flex flex-1 flex-col gap-2">
                       <Input
                         value={slide.content}
-                        onChange={(e) => handleContentChange(slide.id, e.target.value)}
+                        onChange={(e) => updateSlideContent(slide.id, e.target.value)}
                         placeholder={`Slide ${index + 1} content...`}
                         className="h-auto py-1.5"
                         onClick={(e) => e.stopPropagation()}
@@ -495,7 +340,7 @@ export function CarouselCreator({
                       <Select
                         value={slide.type}
                         onValueChange={(value) =>
-                          handleTypeChange(slide.id, value as CarouselSlide["type"])
+                          updateSlideType(slide.id, value as CarouselSlide["type"])
                         }
                       >
                         <SelectTrigger
@@ -521,7 +366,7 @@ export function CarouselCreator({
                       className="text-muted-foreground hover:text-destructive shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleRemoveSlide(slide.id)
+                        removeSlide(slide.id)
                       }}
                       disabled={slides.length <= 1}
                       aria-label={`Remove slide ${index + 1}`}
@@ -536,7 +381,7 @@ export function CarouselCreator({
             {/* Add Slide Button */}
             <Button
               variant="outline"
-              onClick={handleAddSlide}
+              onClick={addSlide}
               className="w-full"
             >
               <IconPlus className="size-4" />
@@ -598,7 +443,7 @@ export function CarouselCreator({
               <Button
                 variant="outline"
                 size="icon"
-                onClick={handlePreviousSlide}
+                onClick={goToPreviousSlide}
                 disabled={currentSlideIndex === 0}
                 aria-label="Previous slide"
               >
@@ -612,7 +457,7 @@ export function CarouselCreator({
               <Button
                 variant="outline"
                 size="icon"
-                onClick={handleNextSlide}
+                onClick={goToNextSlide}
                 disabled={currentSlideIndex === slides.length - 1}
                 aria-label="Next slide"
               >
@@ -623,7 +468,7 @@ export function CarouselCreator({
             {/* Brand Kit Toggle */}
             <Button
               variant={brandKitApplied ? "default" : "outline"}
-              onClick={handleToggleBrandKit}
+              onClick={toggleBrandKit}
               className="w-full"
             >
               <IconPalette className="size-4" />

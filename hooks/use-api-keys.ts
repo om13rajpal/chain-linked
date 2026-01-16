@@ -1,0 +1,273 @@
+/**
+ * API Keys Hook
+ * @description Manages user API keys (BYOK) with Supabase
+ * @module hooks/use-api-keys
+ */
+
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+
+/**
+ * API key provider type
+ */
+export type ApiKeyProvider = 'openai'
+
+/**
+ * API key status response from the server
+ */
+export interface ApiKeyStatus {
+  /** Whether the user has an API key configured */
+  hasKey: boolean
+  /** The API key provider */
+  provider: ApiKeyProvider
+  /** Masked hint showing last 4 characters */
+  keyHint: string | null
+  /** Whether the key is valid (last validation result) */
+  isValid: boolean
+  /** Timestamp of last validation */
+  lastValidated: string | null
+}
+
+/**
+ * Hook return type
+ */
+interface UseApiKeysReturn {
+  /** Current API key status */
+  status: ApiKeyStatus | null
+  /** Loading state */
+  isLoading: boolean
+  /** Saving state */
+  isSaving: boolean
+  /** Validating state */
+  isValidating: boolean
+  /** Error message */
+  error: string | null
+  /** Save or update an API key */
+  saveApiKey: (apiKey: string, provider?: ApiKeyProvider) => Promise<boolean>
+  /** Delete the API key */
+  deleteApiKey: (provider?: ApiKeyProvider) => Promise<boolean>
+  /** Re-validate the existing API key */
+  validateApiKey: () => Promise<boolean>
+  /** Refetch the API key status */
+  refetch: () => Promise<void>
+  /** Clear the error state */
+  clearError: () => void
+}
+
+/**
+ * Default API key status
+ */
+const DEFAULT_STATUS: ApiKeyStatus = {
+  hasKey: false,
+  provider: 'openai',
+  keyHint: null,
+  isValid: false,
+  lastValidated: null,
+}
+
+/**
+ * Hook to manage user API keys (BYOK - Bring Your Own Key)
+ * @returns API key status, loading states, and management functions
+ * @example
+ * const { status, saveApiKey, deleteApiKey, isLoading, error } = useApiKeys()
+ *
+ * // Check if user has a key
+ * if (status?.hasKey) {
+ *   console.log('Key configured:', status.keyHint)
+ * }
+ *
+ * // Save a new key
+ * const success = await saveApiKey('sk-...')
+ */
+export function useApiKeys(): UseApiKeysReturn {
+  const [status, setStatus] = useState<ApiKeyStatus | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isValidating, setIsValidating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  /**
+   * Fetch the current API key status
+   */
+  const fetchStatus = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await fetch('/api/settings/api-keys', {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // User not authenticated - set default status
+          setStatus(DEFAULT_STATUS)
+          return
+        }
+        throw new Error('Failed to fetch API key status')
+      }
+
+      const data: ApiKeyStatus = await response.json()
+      setStatus(data)
+    } catch (err) {
+      console.error('API key fetch error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch API key status')
+      setStatus(DEFAULT_STATUS)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  /**
+   * Save or update an API key
+   */
+  const saveApiKey = useCallback(async (
+    apiKey: string,
+    provider: ApiKeyProvider = 'openai'
+  ): Promise<boolean> => {
+    try {
+      setIsSaving(true)
+      setError(null)
+
+      const response = await fetch('/api/settings/api-keys', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ provider, apiKey }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to save API key')
+        return false
+      }
+
+      // Update local status
+      setStatus({
+        hasKey: true,
+        provider,
+        keyHint: data.keyHint,
+        isValid: data.isValid,
+        lastValidated: data.lastValidated,
+      })
+
+      return true
+    } catch (err) {
+      console.error('API key save error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to save API key')
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }, [])
+
+  /**
+   * Delete the API key
+   */
+  const deleteApiKey = useCallback(async (
+    provider: ApiKeyProvider = 'openai'
+  ): Promise<boolean> => {
+    try {
+      setIsSaving(true)
+      setError(null)
+
+      const response = await fetch('/api/settings/api-keys', {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setError(data.error || 'Failed to delete API key')
+        return false
+      }
+
+      // Update local status
+      setStatus({
+        ...DEFAULT_STATUS,
+        provider,
+      })
+
+      return true
+    } catch (err) {
+      console.error('API key delete error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to delete API key')
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }, [])
+
+  /**
+   * Re-validate the existing API key
+   */
+  const validateApiKey = useCallback(async (): Promise<boolean> => {
+    try {
+      setIsValidating(true)
+      setError(null)
+
+      const response = await fetch('/api/settings/api-keys', {
+        method: 'PATCH',
+        credentials: 'include',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to validate API key')
+        return false
+      }
+
+      // Update local status with validation result
+      if (status) {
+        setStatus({
+          ...status,
+          isValid: data.isValid,
+          lastValidated: data.lastValidated,
+        })
+      }
+
+      if (!data.isValid && data.error) {
+        setError(data.error)
+      }
+
+      return data.isValid
+    } catch (err) {
+      console.error('API key validation error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to validate API key')
+      return false
+    } finally {
+      setIsValidating(false)
+    }
+  }, [status])
+
+  /**
+   * Clear the error state
+   */
+  const clearError = useCallback(() => {
+    setError(null)
+  }, [])
+
+  // Fetch status on mount
+  useEffect(() => {
+    fetchStatus()
+  }, [fetchStatus])
+
+  return {
+    status,
+    isLoading,
+    isSaving,
+    isValidating,
+    error,
+    saveApiKey,
+    deleteApiKey,
+    validateApiKey,
+    refetch: fetchStatus,
+    clearError,
+  }
+}

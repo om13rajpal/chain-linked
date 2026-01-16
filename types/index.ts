@@ -5,6 +5,7 @@
  */
 
 export * from './database'
+export * from './carousel'
 
 /**
  * Analytics card data structure

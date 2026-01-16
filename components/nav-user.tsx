@@ -1,11 +1,17 @@
+/**
+ * Nav User Component
+ * @description User profile dropdown in sidebar footer with sign out functionality
+ * @module components/nav-user
+ */
+
 "use client"
 
+import { useRouter } from "next/navigation"
 import {
-  IconCreditCard,
   IconDotsVertical,
+  IconHelp,
   IconLogout,
-  IconNotification,
-  IconUserCircle,
+  IconSettings,
 } from "@tabler/icons-react"
 
 import {
@@ -29,16 +35,53 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
-export function NavUser({
-  user,
-}: {
+/**
+ * Props for NavUser component
+ */
+interface NavUserProps {
   user: {
     name: string
     email: string
     avatar: string
+    /** LinkedIn headline (job title) */
+    headline?: string
   }
-}) {
+  onSignOut?: () => Promise<void>
+}
+
+/**
+ * Get initials from a name string
+ * @param name - Full name string
+ * @returns Two-letter initials
+ */
+function getInitials(name: string): string {
+  const parts = name.trim().split(' ').filter(Boolean)
+  if (parts.length === 0) return 'U'
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+/**
+ * NavUser Component
+ * Displays user profile in sidebar footer with dropdown menu for account actions
+ * @param props - Component props
+ * @param props.user - User data object
+ * @param props.onSignOut - Optional sign out callback
+ * @returns NavUser JSX
+ */
+export function NavUser({ user, onSignOut }: NavUserProps) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+
+  /**
+   * Handle sign out action
+   */
+  const handleSignOut = async () => {
+    if (onSignOut) {
+      await onSignOut()
+      router.push('/login')
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -51,13 +94,15 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{getInitials(user.name)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {user.email}
-                </span>
+                {user.headline && (
+                  <span className="text-muted-foreground truncate text-xs">
+                    {user.headline}
+                  </span>
+                )}
               </div>
               <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -72,7 +117,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{getInitials(user.name)}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -84,21 +129,17 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <IconUserCircle />
-                Account
+              <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+                <IconSettings />
+                Settings
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconCreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconNotification />
-                Notifications
+              <DropdownMenuItem onClick={() => window.open('https://help.chainlinked.com', '_blank')}>
+                <IconHelp />
+                Help
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
               <IconLogout />
               Log out
             </DropdownMenuItem>

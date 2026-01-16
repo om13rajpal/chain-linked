@@ -1,3 +1,9 @@
+/**
+ * App Sidebar Component
+ * @description Main navigation sidebar for the ChainLinked application
+ * @module components/app-sidebar
+ */
+
 "use client"
 
 import * as React from "react"
@@ -11,6 +17,7 @@ import {
   IconPresentation,
   IconSettings,
   IconSparkles,
+  IconSwipe,
   IconTemplate,
   IconUsers,
 } from "@tabler/icons-react"
@@ -28,21 +35,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useAuthContext } from "@/lib/auth/auth-provider"
 
 /**
- * Static navigation and user data for the ChainLinked application sidebar.
+ * Static navigation data for the ChainLinked application sidebar.
  * This data structure defines the complete navigation hierarchy.
  */
-const data = {
-  /**
-   * Current user information displayed in the sidebar footer.
-   */
-  user: {
-    name: "Demo User",
-    email: "demo@chainlinked.com",
-    avatar: "",
-  },
-
+const navigationData = {
   /**
    * Main navigation items - primary app features.
    * These are always visible in the sidebar.
@@ -77,7 +76,7 @@ const data = {
 
   /**
    * Content section navigation - collapsible group for content management.
-   * Includes templates, inspiration, and carousel management.
+   * Includes templates, inspiration, swipe interface, and carousel management.
    */
   navContent: [
     {
@@ -89,6 +88,11 @@ const data = {
       title: "Inspiration",
       url: "/dashboard/inspiration",
       icon: IconSparkles,
+    },
+    {
+      title: "Swipe",
+      url: "/dashboard/swipe",
+      icon: IconSwipe,
     },
     {
       title: "Carousels",
@@ -126,20 +130,65 @@ const data = {
  * - Content templates and inspiration
  * - Settings and help
  *
+ * Uses real user data from auth context including LinkedIn profile information.
+ *
  * @example
- * \`\`\`tsx
+ * ```tsx
  * <SidebarProvider>
  *   <AppSidebar />
  *   <SidebarInset>
  *     <main>Page content</main>
  *   </SidebarInset>
  * </SidebarProvider>
- * \`\`\`
+ * ```
  *
  * @param props - Standard React component props extending Sidebar component props
  * @returns The rendered sidebar component with full navigation structure
  */
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user, profile, signOut, isLoading } = useAuthContext()
+
+  /**
+   * Derive user display data from auth context
+   * Prioritizes LinkedIn profile data, falls back to Supabase user data
+   */
+  const userData = React.useMemo(() => {
+    if (!user) {
+      return {
+        name: "Guest",
+        email: "",
+        avatar: "",
+        headline: undefined,
+      }
+    }
+
+    // Get name: LinkedIn raw_data.name > profile.name > user metadata > email
+    const linkedInName = profile?.linkedin_profile?.raw_data?.name
+    const profileName = profile?.name
+    const metadataName = user.user_metadata?.name || user.user_metadata?.full_name
+    const emailName = user.email?.split('@')[0] || 'User'
+
+    const name = linkedInName || profileName || metadataName || emailName
+
+    // Get avatar: LinkedIn profilePhotoUrl > profile_picture_url > user metadata
+    const linkedInAvatar = profile?.linkedin_profile?.raw_data?.profilePhotoUrl ||
+                          profile?.linkedin_profile?.profile_picture_url
+    const metadataAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture
+
+    const avatar = linkedInAvatar || metadataAvatar || ""
+
+    // Get headline from LinkedIn profile
+    const headline = profile?.linkedin_profile?.headline ||
+                     profile?.linkedin_profile?.raw_data?.headline
+
+    return {
+      name: name as string,
+      email: user.email || "",
+      avatar: avatar as string,
+      headline: headline as string | undefined,
+    }
+  }, [user, profile])
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       {/* Sidebar Header - Company Branding */}
@@ -162,22 +211,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {/* Sidebar Content - Navigation Groups */}
       <SidebarContent id="sidebar-navigation">
         {/* Main Navigation - Primary features */}
-        <NavMain items={data.navMain} />
+        <NavMain items={navigationData.navMain} />
 
         {/* Content Section - Collapsible content management */}
         <NavContent
-          items={data.navContent}
+          items={navigationData.navContent}
           label="Content"
           defaultOpen={true}
         />
 
         {/* Secondary Navigation - Settings and support */}
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavSecondary items={navigationData.navSecondary} className="mt-auto" />
       </SidebarContent>
 
       {/* Sidebar Footer - User profile and actions */}
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={userData} onSignOut={signOut} />
       </SidebarFooter>
     </Sidebar>
   )

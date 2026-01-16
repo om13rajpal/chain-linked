@@ -158,3 +158,58 @@ export const inspirationToast = {
   saved: () =>
     showSuccess("Inspiration saved", "Added to your saved posts"),
 }
+
+/**
+ * Show a toast for AI remix actions.
+ */
+export const remixToast = {
+  generating: () =>
+    showLoading("Generating remix..."),
+
+  success: () =>
+    showSuccess("Remix generated", "Your AI-rewritten post is ready"),
+
+  copied: () =>
+    showSuccess("Copied to clipboard", "Remixed content copied"),
+
+  loadedToComposer: () =>
+    showInfo("Loaded to composer", "Edit and publish your remixed post"),
+
+  error: (message?: string) =>
+    showError("Remix failed", message || "Please try again"),
+
+  noApiKey: () =>
+    showWarning("API key required", "Add your OpenAI API key in Settings"),
+
+  invalidApiKey: () =>
+    showError("Invalid API key", "Please update your OpenAI API key in Settings"),
+
+  rateLimited: () =>
+    showWarning("Rate limited", "Please wait a moment and try again"),
+
+  quotaExceeded: () =>
+    showError("Quota exceeded", "Check your OpenAI billing"),
+}
+
+/**
+ * Show a toast for swipe interface actions.
+ */
+export const swipeToast = {
+  liked: () =>
+    showSuccess("Added to liked", "This preference helps improve suggestions"),
+
+  skipped: () =>
+    showInfo("Skipped", "We'll use this to refine your suggestions"),
+
+  editAndPost: () =>
+    showInfo("Opening composer", "Edit the suggestion and make it yours"),
+
+  batchComplete: (count: number) =>
+    showSuccess(`Reviewed ${count} suggestions`, "Great work! Check back for more"),
+
+  preferenceSaved: () =>
+    showSuccess("Preference saved", "Your feedback improves future suggestions"),
+
+  loadError: () =>
+    showError("Failed to load suggestions", "Please try again"),
+}

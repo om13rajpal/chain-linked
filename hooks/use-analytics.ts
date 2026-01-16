@@ -26,6 +26,17 @@ interface AnalyticsMetrics {
   engagementRate: MetricData
   followers: MetricData
   profileViews: MetricData
+  searchAppearances: MetricData
+  connections: MetricData
+  membersReached: MetricData
+}
+
+/**
+ * Analytics metadata
+ */
+interface AnalyticsMetadata {
+  lastUpdated: string | null
+  captureMethod: string | null
 }
 
 /**
@@ -35,6 +46,7 @@ interface ChartDataPoint {
   date: string
   impressions: number
   engagements: number
+  profileViews: number
 }
 
 /**
@@ -47,6 +59,8 @@ interface UseAnalyticsReturn {
   chartData: ChartDataPoint[]
   /** Raw analytics records */
   rawData: Tables<'linkedin_analytics'>[]
+  /** Analytics metadata (last updated, capture method) */
+  metadata: AnalyticsMetadata | null
   /** Loading state */
   isLoading: boolean
   /** Error message if any */
@@ -63,17 +77,9 @@ const DEFAULT_METRICS: AnalyticsMetrics = {
   engagementRate: { value: 0, change: 0 },
   followers: { value: 0, change: 0 },
   profileViews: { value: 0, change: 0 },
-}
-
-/**
- * Calculate percentage change between two values
- * @param current - Current value
- * @param previous - Previous value
- * @returns Percentage change
- */
-function calculateChange(current: number, previous: number): number {
-  if (previous === 0) return current > 0 ? 100 : 0
-  return ((current - previous) / previous) * 100
+  searchAppearances: { value: 0, change: 0 },
+  connections: { value: 0, change: 0 },
+  membersReached: { value: 0, change: 0 },
 }
 
 /**
@@ -87,6 +93,7 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
   const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null)
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
   const [rawData, setRawData] = useState<Tables<'linkedin_analytics'>[]>([])
+  const [metadata, setMetadata] = useState<AnalyticsMetadata | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
@@ -113,23 +120,44 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
         targetUserId = user.id
       }
 
-      // Fetch analytics for the last 90 days
-      const ninetyDaysAgo = new Date()
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-
+      // Fetch all analytics records for charting, ordered by captured_at
       const { data: analytics, error: fetchError } = await supabase
         .from('linkedin_analytics')
         .select('*')
         .eq('user_id', targetUserId)
-        .gte('captured_at', ninetyDaysAgo.toISOString())
-        .order('captured_at', { ascending: true })
+        .order('captured_at', { ascending: false })
 
       if (fetchError) {
         throw fetchError
       }
 
+      // Also fetch profile data for accurate follower count
+      const { data: profile, error: profileError } = await supabase
+        .from('linkedin_profiles')
+        .select('followers_count, connections_count')
+        .eq('user_id', targetUserId)
+        .single()
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.warn('Profile fetch warning:', profileError)
+      }
+
       if (!analytics || analytics.length === 0) {
-        setMetrics(DEFAULT_METRICS)
+        // Even if no analytics, we can show profile data
+        if (profile) {
+          setMetrics({
+            impressions: { value: 0, change: 0 },
+            engagementRate: { value: 0, change: 0 },
+            followers: { value: profile.followers_count || 0, change: 0 },
+            profileViews: { value: 0, change: 0 },
+            searchAppearances: { value: 0, change: 0 },
+            connections: { value: profile.connections_count || 0, change: 0 },
+            membersReached: { value: 0, change: 0 },
+          })
+        } else {
+          setMetrics(DEFAULT_METRICS)
+        }
+        setMetadata(null)
         setChartData([])
         setRawData([])
         setIsLoading(false)
@@ -138,77 +166,85 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
 
       setRawData(analytics)
 
-      // Calculate current period metrics (last 30 days)
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      const sixtyDaysAgo = new Date()
-      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+      // Use the LATEST analytics record for current metrics (first one since ordered desc)
+      const latestAnalytics = analytics[0]
 
-      const currentPeriod = analytics.filter(
-        (a) => new Date(a.captured_at) >= thirtyDaysAgo
-      )
-      const previousPeriod = analytics.filter(
-        (a) => new Date(a.captured_at) >= sixtyDaysAgo && new Date(a.captured_at) < thirtyDaysAgo
-      )
-
-      // Aggregate metrics
-      const sumMetrics = (records: typeof analytics) => ({
-        impressions: records.reduce((sum, r) => sum + (r.impressions || 0), 0),
-        engagements: records.reduce((sum, r) => sum + (r.engagements || 0), 0),
-        followers: records.reduce((sum, r) => sum + (r.new_followers || 0), 0),
-        profileViews: records.reduce((sum, r) => sum + (r.profile_views || 0), 0),
-      })
-
-      const current = sumMetrics(currentPeriod)
-      const previous = sumMetrics(previousPeriod)
+      // Extract data from raw_data if available
+      const rawDataObj = latestAnalytics.raw_data as {
+        impressionGrowth?: number
+        captureMethod?: string
+        last_updated?: string
+        extractedAt?: string
+      } | null
+      const impressionGrowth = rawDataObj?.impressionGrowth ?? 0
 
       // Calculate engagement rate (engagements / impressions * 100)
-      const currentEngagementRate = current.impressions > 0
-        ? (current.engagements / current.impressions) * 100
-        : 0
-      const previousEngagementRate = previous.impressions > 0
-        ? (previous.engagements / previous.impressions) * 100
-        : 0
+      const impressions = latestAnalytics.impressions || 0
+      const engagements = latestAnalytics.engagements || 0
+      const engagementRate = impressions > 0 ? (engagements / impressions) * 100 : 0
+
+      // Use profile followers_count for accurate total followers
+      // The new_followers in linkedin_analytics is actually total followers in the captured data
+      const totalFollowers = profile?.followers_count || latestAnalytics.new_followers || 0
+      const totalConnections = profile?.connections_count || 0
 
       const aggregatedMetrics: AnalyticsMetrics = {
         impressions: {
-          value: current.impressions,
-          change: calculateChange(current.impressions, previous.impressions),
+          value: impressions,
+          change: impressionGrowth,
         },
         engagementRate: {
-          value: currentEngagementRate,
-          change: calculateChange(currentEngagementRate, previousEngagementRate),
+          value: engagementRate,
+          change: 0, // Would need historical data to calculate change
         },
         followers: {
-          value: current.followers,
-          change: calculateChange(current.followers, previous.followers),
+          value: totalFollowers,
+          change: 0, // Would need historical data to calculate growth
         },
         profileViews: {
-          value: current.profileViews,
-          change: calculateChange(current.profileViews, previous.profileViews),
+          value: latestAnalytics.profile_views || 0,
+          change: 0,
+        },
+        searchAppearances: {
+          value: latestAnalytics.search_appearances || 0,
+          change: 0,
+        },
+        connections: {
+          value: totalConnections,
+          change: 0,
+        },
+        membersReached: {
+          value: latestAnalytics.members_reached || 0,
+          change: 0,
         },
       }
 
       setMetrics(aggregatedMetrics)
 
-      // Build chart data (aggregate by date)
-      const chartDataMap = new Map<string, ChartDataPoint>()
-      analytics.forEach((record) => {
-        const date = record.captured_at.split('T')[0]
-        const existing = chartDataMap.get(date)
-        if (existing) {
-          existing.impressions += record.impressions || 0
-          existing.engagements += record.engagements || 0
-        } else {
-          chartDataMap.set(date, {
-            date,
-            impressions: record.impressions || 0,
-            engagements: record.engagements || 0,
-          })
-        }
+      // Set metadata
+      setMetadata({
+        lastUpdated: rawDataObj?.last_updated || rawDataObj?.extractedAt || latestAnalytics.captured_at,
+        captureMethod: rawDataObj?.captureMethod || null,
       })
 
-      // Sort by date
+      // Build chart data from all analytics records (group by date)
+      const chartDataMap = new Map<string, ChartDataPoint>()
+
+      // Process in chronological order for chart
+      const sortedAnalytics = [...analytics].reverse()
+
+      sortedAnalytics.forEach((record) => {
+        const date = record.captured_at.split('T')[0]
+        // For multiple records on same day, keep the latest one (last in array since we reversed)
+        chartDataMap.set(date, {
+          date,
+          impressions: record.impressions || 0,
+          engagements: record.engagements || 0,
+          profileViews: record.profile_views || 0,
+        })
+      })
+
+      // Sort by date for chart display
       const sortedChartData = Array.from(chartDataMap.values()).sort(
         (a, b) => a.date.localeCompare(b.date)
       )
@@ -233,6 +269,7 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
     metrics,
     chartData,
     rawData,
+    metadata,
     isLoading,
     error,
     refetch: fetchAnalytics,

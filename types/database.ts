@@ -60,53 +60,59 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          profile_urn: string
+          profile_urn: string | null
           public_identifier: string | null
           first_name: string | null
           last_name: string | null
           headline: string | null
           location: string | null
+          industry: string | null
           profile_picture_url: string | null
           background_image_url: string | null
           connections_count: number | null
           followers_count: number | null
+          summary: string | null
           raw_data: Json | null
-          captured_at: string
-          updated_at: string
+          captured_at: string | null
+          updated_at: string | null
         }
         Insert: {
           id?: string
           user_id: string
-          profile_urn: string
+          profile_urn?: string | null
           public_identifier?: string | null
           first_name?: string | null
           last_name?: string | null
           headline?: string | null
           location?: string | null
+          industry?: string | null
           profile_picture_url?: string | null
           background_image_url?: string | null
           connections_count?: number | null
           followers_count?: number | null
+          summary?: string | null
           raw_data?: Json | null
-          captured_at?: string
-          updated_at?: string
+          captured_at?: string | null
+          updated_at?: string | null
         }
         Update: {
           id?: string
           user_id?: string
-          profile_urn?: string
+          profile_urn?: string | null
           public_identifier?: string | null
           first_name?: string | null
           last_name?: string | null
           headline?: string | null
           location?: string | null
+          industry?: string | null
           profile_picture_url?: string | null
           background_image_url?: string | null
           connections_count?: number | null
           followers_count?: number | null
+          summary?: string | null
           raw_data?: Json | null
-          captured_at?: string
-          updated_at?: string
+          captured_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -215,6 +221,7 @@ export interface Database {
           followers_gained: number | null
           demographics: Json | null
           raw_data: Json | null
+          posted_at: string | null
           captured_at: string
           updated_at: string
         }
@@ -235,6 +242,7 @@ export interface Database {
           followers_gained?: number | null
           demographics?: Json | null
           raw_data?: Json | null
+          posted_at?: string | null
           captured_at?: string
           updated_at?: string
         }
@@ -255,6 +263,7 @@ export interface Database {
           followers_gained?: number | null
           demographics?: Json | null
           raw_data?: Json | null
+          posted_at?: string | null
           captured_at?: string
           updated_at?: string
         }
@@ -591,6 +600,40 @@ export interface Database {
         }
         Relationships: []
       }
+      /** Companies - Parent organizations for teams */
+      companies: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          logo_url: string | null
+          owner_id: string
+          settings: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          logo_url?: string | null
+          owner_id: string
+          settings?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          logo_url?: string | null
+          owner_id?: string
+          settings?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       /** Teams/Companies */
       teams: {
         Row: {
@@ -598,6 +641,7 @@ export interface Database {
           name: string
           logo_url: string | null
           owner_id: string
+          company_id: string | null
           created_at: string
           updated_at: string
         }
@@ -606,6 +650,7 @@ export interface Database {
           name: string
           logo_url?: string | null
           owner_id: string
+          company_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -614,6 +659,7 @@ export interface Database {
           name?: string
           logo_url?: string | null
           owner_id?: string
+          company_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -644,43 +690,95 @@ export interface Database {
         }
         Relationships: []
       }
+      /** Team invitations for onboarding */
+      team_invitations: {
+        Row: {
+          id: string
+          team_id: string
+          email: string
+          role: string
+          token: string
+          invited_by: string
+          status: string
+          expires_at: string
+          created_at: string
+          accepted_at: string | null
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          email: string
+          role?: string
+          token: string
+          invited_by: string
+          status?: string
+          expires_at?: string
+          created_at?: string
+          accepted_at?: string | null
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          email?: string
+          role?: string
+          token?: string
+          invited_by?: string
+          status?: string
+          expires_at?: string
+          created_at?: string
+          accepted_at?: string | null
+        }
+        Relationships: []
+      }
       /** Extension settings */
       extension_settings: {
         Row: {
           id: string
           user_id: string
-          auto_sync: boolean
-          sync_interval: number
-          capture_feed: boolean
-          capture_analytics: boolean
-          dark_mode: boolean
-          notifications: boolean
-          created_at: string
-          updated_at: string
+          auto_capture_enabled: boolean | null
+          capture_feed: boolean | null
+          capture_analytics: boolean | null
+          capture_profile: boolean | null
+          capture_messaging: boolean | null
+          sync_enabled: boolean | null
+          sync_interval: number | null
+          dark_mode: boolean | null
+          notifications_enabled: boolean | null
+          raw_settings: Json | null
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
           id?: string
           user_id: string
-          auto_sync?: boolean
-          sync_interval?: number
-          capture_feed?: boolean
-          capture_analytics?: boolean
-          dark_mode?: boolean
-          notifications?: boolean
-          created_at?: string
-          updated_at?: string
+          auto_capture_enabled?: boolean | null
+          capture_feed?: boolean | null
+          capture_analytics?: boolean | null
+          capture_profile?: boolean | null
+          capture_messaging?: boolean | null
+          sync_enabled?: boolean | null
+          sync_interval?: number | null
+          dark_mode?: boolean | null
+          notifications_enabled?: boolean | null
+          raw_settings?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
           id?: string
           user_id?: string
-          auto_sync?: boolean
-          sync_interval?: number
-          capture_feed?: boolean
-          capture_analytics?: boolean
-          dark_mode?: boolean
-          notifications?: boolean
-          created_at?: string
-          updated_at?: string
+          auto_capture_enabled?: boolean | null
+          capture_feed?: boolean | null
+          capture_analytics?: boolean | null
+          capture_profile?: boolean | null
+          capture_messaging?: boolean | null
+          sync_enabled?: boolean | null
+          sync_interval?: number | null
+          dark_mode?: boolean | null
+          notifications_enabled?: boolean | null
+          raw_settings?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -752,6 +850,243 @@ export interface Database {
         }
         Relationships: []
       }
+      /** User API keys for BYOK (encrypted storage) */
+      user_api_keys: {
+        Row: {
+          id: string
+          user_id: string
+          provider: string
+          encrypted_key: string
+          key_hint: string | null
+          is_valid: boolean
+          last_validated_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          provider?: string
+          encrypted_key: string
+          key_hint?: string | null
+          is_valid?: boolean
+          last_validated_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          provider?: string
+          encrypted_key?: string
+          key_hint?: string | null
+          is_valid?: boolean
+          last_validated_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      /** User niches for content personalization */
+      user_niches: {
+        Row: {
+          id: string
+          user_id: string
+          niche: string
+          confidence: number | null
+          source: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          niche: string
+          confidence?: number | null
+          source?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          niche?: string
+          confidence?: number | null
+          source?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      /** Saved/bookmarked inspiration posts */
+      saved_inspirations: {
+        Row: {
+          id: string
+          user_id: string
+          inspiration_post_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          inspiration_post_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          inspiration_post_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      /** LinkedIn OAuth tokens for API access */
+      linkedin_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          access_token: string
+          refresh_token: string | null
+          expires_at: string
+          linkedin_urn: string | null
+          scopes: string[] | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          access_token: string
+          refresh_token?: string | null
+          expires_at: string
+          linkedin_urn?: string | null
+          scopes?: string[] | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          access_token?: string
+          refresh_token?: string | null
+          expires_at?: string
+          linkedin_urn?: string | null
+          scopes?: string[] | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      /** Brand kits extracted from websites */
+      brand_kits: {
+        Row: {
+          id: string
+          user_id: string
+          team_id: string | null
+          website_url: string
+          primary_color: string
+          secondary_color: string | null
+          accent_color: string | null
+          background_color: string | null
+          text_color: string | null
+          font_primary: string | null
+          font_secondary: string | null
+          logo_url: string | null
+          logo_storage_path: string | null
+          raw_extraction: Json | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          team_id?: string | null
+          website_url: string
+          primary_color: string
+          secondary_color?: string | null
+          accent_color?: string | null
+          background_color?: string | null
+          text_color?: string | null
+          font_primary?: string | null
+          font_secondary?: string | null
+          logo_url?: string | null
+          logo_storage_path?: string | null
+          raw_extraction?: Json | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          team_id?: string | null
+          website_url?: string
+          primary_color?: string
+          secondary_color?: string | null
+          accent_color?: string | null
+          background_color?: string | null
+          text_color?: string | null
+          font_primary?: string | null
+          font_secondary?: string | null
+          logo_url?: string | null
+          logo_storage_path?: string | null
+          raw_extraction?: Json | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      /** LinkedIn Voyager API credentials (session cookies) */
+      linkedin_credentials: {
+        Row: {
+          id: string
+          user_id: string
+          li_at: string
+          jsessionid: string
+          liap: string | null
+          csrf_token: string | null
+          user_agent: string | null
+          cookies_set_at: string
+          expires_at: string | null
+          is_valid: boolean
+          last_used_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          li_at: string
+          jsessionid: string
+          liap?: string | null
+          csrf_token?: string | null
+          user_agent?: string | null
+          cookies_set_at?: string
+          expires_at?: string | null
+          is_valid?: boolean
+          last_used_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          li_at?: string
+          jsessionid?: string
+          liap?: string | null
+          csrf_token?: string | null
+          user_agent?: string | null
+          cookies_set_at?: string
+          expires_at?: string | null
+          is_valid?: boolean
+          last_used_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -776,3 +1111,74 @@ export type TablesInsert<T extends keyof Database['public']['Tables']> = Databas
 
 /** Helper type to extract update types */
 export type TablesUpdate<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update']
+
+/**
+ * Company type alias for convenience
+ */
+export type Company = Tables<'companies'>
+
+/**
+ * Company insert type alias
+ */
+export type CompanyInsert = TablesInsert<'companies'>
+
+/**
+ * Company update type alias
+ */
+export type CompanyUpdate = TablesUpdate<'companies'>
+
+/**
+ * Team type alias for convenience
+ */
+export type Team = Tables<'teams'>
+
+/**
+ * Team member type alias for convenience
+ */
+export type TeamMember = Tables<'team_members'>
+
+/**
+ * Team invitation type alias for convenience
+ */
+export type TeamInvitation = Tables<'team_invitations'>
+
+/**
+ * Team invitation insert type alias
+ */
+export type TeamInvitationInsert = TablesInsert<'team_invitations'>
+
+/**
+ * Invitation status enum type
+ */
+export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'cancelled'
+
+/**
+ * Team member role enum type
+ */
+export type TeamMemberRole = 'owner' | 'admin' | 'member'
+
+/**
+ * Company with related team data
+ */
+export interface CompanyWithTeam extends Company {
+  team?: Team | null
+  team_members?: TeamMember[]
+}
+
+/**
+ * Team invitation with inviter info
+ */
+export interface TeamInvitationWithInviter extends TeamInvitation {
+  inviter?: {
+    name: string | null
+    email: string
+    avatar_url: string | null
+  }
+  team?: {
+    name: string
+    company?: {
+      name: string
+      logo_url: string | null
+    }
+  }
+}

@@ -1,0 +1,249 @@
+/**
+ * Post Analytics Hook
+ * @description Fetches post performance analytics from Supabase
+ * @module hooks/use-post-analytics
+ */
+
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import type { Tables } from '@/types/database'
+import type {
+  PostPerformanceData,
+  PostMetrics,
+} from '@/components/features/post-performance'
+
+/**
+ * Hook return type for post analytics data
+ */
+interface UsePostAnalyticsReturn {
+  /** Top performing posts with analytics */
+  posts: PostPerformanceData[]
+  /** Currently selected post for detailed view */
+  selectedPost: PostPerformanceData | null
+  /** Raw data from database */
+  rawPosts: Tables<'post_analytics'>[]
+  /** Loading state */
+  isLoading: boolean
+  /** Error message if any */
+  error: string | null
+  /** Select a post for detailed view */
+  selectPost: (postId: string | null) => void
+  /** Refetch posts */
+  refetch: () => Promise<void>
+}
+
+/**
+ * Generate simulated daily metrics from total values
+ * @param totalImpressions - Total impressions
+ * @param totalEngagements - Total engagements (reactions + comments + reposts)
+ * @param reactions - Total reactions (likes)
+ * @param comments - Total comments
+ * @param reposts - Total shares/reposts
+ * @param postedAt - Post date
+ * @returns Array of daily metrics for the past 7 days
+ */
+function generateDailyMetrics(
+  totalImpressions: number,
+  totalEngagements: number,
+  reactions: number,
+  comments: number,
+  reposts: number,
+  postedAt: string
+): PostMetrics[] {
+  const metrics: PostMetrics[] = []
+  const postDate = new Date(postedAt)
+  const today = new Date()
+
+  // Calculate days since post
+  const daysSincePost = Math.min(
+    7,
+    Math.max(1, Math.floor((today.getTime() - postDate.getTime()) / (1000 * 60 * 60 * 24)))
+  )
+
+  // Distribution weights (day 1 gets most engagement, then decreasing)
+  const weights = [0.35, 0.25, 0.15, 0.10, 0.07, 0.05, 0.03]
+  const activeWeights = weights.slice(0, daysSincePost)
+  const totalWeight = activeWeights.reduce((a, b) => a + b, 0)
+  const normalizedWeights = activeWeights.map(w => w / totalWeight)
+
+  // Generate daily metrics
+  for (let i = 0; i < daysSincePost; i++) {
+    const date = new Date(postDate)
+    date.setDate(date.getDate() + i)
+
+    const weight = normalizedWeights[i]
+    const dayImpressions = Math.round(totalImpressions * weight)
+    const dayEngagements = Math.round(totalEngagements * weight)
+    const dayReactions = Math.round(reactions * weight)
+    const dayComments = Math.round(comments * weight)
+    const dayReposts = Math.round(reposts * weight)
+    // Estimate clicks as ~20% of engagements
+    const dayClicks = Math.round(dayEngagements * 0.2)
+
+    metrics.push({
+      date: date.toISOString().split('T')[0],
+      impressions: dayImpressions,
+      engagements: dayEngagements,
+      likes: dayReactions,
+      comments: dayComments,
+      shares: dayReposts,
+      clicks: dayClicks,
+    })
+  }
+
+  return metrics
+}
+
+/**
+ * Hook to fetch post analytics from Supabase
+ * @param userId - User ID to fetch analytics for (optional, uses current user if not provided)
+ * @param limit - Maximum number of posts to fetch (default: 10)
+ * @returns Post analytics data, loading state, and management functions
+ * @example
+ * const { posts, selectedPost, selectPost, isLoading } = usePostAnalytics()
+ */
+export function usePostAnalytics(userId?: string, limit = 10): UsePostAnalyticsReturn {
+  const [posts, setPosts] = useState<PostPerformanceData[]>([])
+  const [selectedPost, setSelectedPost] = useState<PostPerformanceData | null>(null)
+  const [rawPosts, setRawPosts] = useState<Tables<'post_analytics'>[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const supabase = createClient()
+
+  /**
+   * Fetch post analytics from database
+   */
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Get current user if userId not provided
+      let targetUserId = userId
+      if (!targetUserId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        targetUserId = user?.id
+      }
+
+      if (!targetUserId) {
+        setPosts([])
+        setRawPosts([])
+        setSelectedPost(null)
+        setIsLoading(false)
+        return
+      }
+
+      // Fetch post analytics ordered by impressions
+      const { data: analyticsData, error: analyticsError } = await supabase
+        .from('post_analytics')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .order('impressions', { ascending: false })
+        .limit(limit)
+
+      if (analyticsError) {
+        throw analyticsError
+      }
+
+      // Fetch user's profile for author info
+      const { data: profileData } = await supabase
+        .from('linkedin_profiles')
+        .select('first_name, last_name, profile_picture_url')
+        .eq('user_id', targetUserId)
+        .single()
+
+      const authorName = profileData
+        ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() || 'Unknown'
+        : 'Unknown'
+      const authorAvatar = profileData?.profile_picture_url || undefined
+
+      if (!analyticsData || analyticsData.length === 0) {
+        setPosts([])
+        setRawPosts([])
+        setSelectedPost(null)
+        setIsLoading(false)
+        return
+      }
+
+      // Transform to PostPerformanceData format
+      const transformedPosts: PostPerformanceData[] = analyticsData.map((post) => {
+        const totalEngagements = (post.reactions || 0) + (post.comments || 0) + (post.reposts || 0)
+        const impressions = post.impressions || 0
+        const engagementRate = post.engagement_rate != null
+          ? post.engagement_rate
+          : impressions > 0
+            ? (totalEngagements / impressions) * 100
+            : 0
+
+        return {
+          id: post.id,
+          content: post.post_content || '',
+          publishedAt: post.posted_at || post.captured_at,
+          author: {
+            name: authorName,
+            avatarUrl: authorAvatar,
+          },
+          totalImpressions: impressions,
+          totalEngagements,
+          engagementRate: Math.round(engagementRate * 10) / 10,
+          metrics: generateDailyMetrics(
+            impressions,
+            totalEngagements,
+            post.reactions || 0,
+            post.comments || 0,
+            post.reposts || 0,
+            post.posted_at || post.captured_at
+          ),
+          // Demographics could be added here if available
+          audienceBreakdown: post.demographics && Array.isArray(post.demographics) && post.demographics.length > 0
+            ? (post.demographics as Array<{ label: string; percentage: number }>)
+            : undefined,
+        }
+      })
+
+      setPosts(transformedPosts)
+      setRawPosts(analyticsData)
+
+      // Auto-select the top performing post
+      if (transformedPosts.length > 0 && !selectedPost) {
+        setSelectedPost(transformedPosts[0])
+      }
+    } catch (err) {
+      console.error('Post analytics fetch error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch post analytics')
+      setPosts([])
+      setRawPosts([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [supabase, userId, limit, selectedPost])
+
+  /**
+   * Select a post for detailed view
+   */
+  const selectPost = useCallback((postId: string | null) => {
+    if (!postId) {
+      setSelectedPost(null)
+      return
+    }
+    const post = posts.find(p => p.id === postId)
+    setSelectedPost(post || null)
+  }, [posts])
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchAnalytics()
+  }, [fetchAnalytics])
+
+  return {
+    posts,
+    selectedPost,
+    rawPosts,
+    isLoading,
+    error,
+    selectPost,
+    refetch: fetchAnalytics,
+  }
+}

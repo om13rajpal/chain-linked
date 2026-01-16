@@ -1,0 +1,265 @@
+/**
+ * OpenAI Client with BYOK (Bring Your Own Key) Support
+ * @description Handles OpenAI API interactions using user-provided API keys
+ * @module lib/ai/openai-client
+ */
+
+import OpenAI from 'openai'
+
+/**
+ * Configuration for creating an OpenAI client instance
+ */
+export interface OpenAIClientConfig {
+  /** User's OpenAI API key */
+  apiKey: string
+  /** Optional timeout in milliseconds (default: 30000) */
+  timeout?: number
+  /** Optional max retries (default: 2) */
+  maxRetries?: number
+}
+
+/**
+ * Chat completion request parameters
+ */
+export interface ChatCompletionRequest {
+  /** System prompt for the AI */
+  systemPrompt: string
+  /** User message/content to process */
+  userMessage: string
+  /** Optional model to use (default: gpt-4o-mini) */
+  model?: string
+  /** Optional temperature for creativity (default: 0.7) */
+  temperature?: number
+  /** Optional max tokens for response (default: 1024) */
+  maxTokens?: number
+}
+
+/**
+ * Chat completion response
+ */
+export interface ChatCompletionResponse {
+  /** Generated content */
+  content: string
+  /** Tokens used in the request */
+  promptTokens: number
+  /** Tokens used in the response */
+  completionTokens: number
+  /** Total tokens used */
+  totalTokens: number
+  /** Model used for generation */
+  model: string
+  /** Finish reason */
+  finishReason: string | null
+}
+
+/**
+ * Error types for OpenAI operations
+ */
+export type OpenAIErrorType =
+  | 'invalid_api_key'
+  | 'rate_limit'
+  | 'insufficient_quota'
+  | 'server_error'
+  | 'timeout'
+  | 'unknown'
+
+/**
+ * Custom error class for OpenAI-related errors
+ */
+export class OpenAIError extends Error {
+  /** Error type for categorization */
+  type: OpenAIErrorType
+  /** Original error if available */
+  originalError?: unknown
+
+  constructor(message: string, type: OpenAIErrorType, originalError?: unknown) {
+    super(message)
+    this.name = 'OpenAIError'
+    this.type = type
+    this.originalError = originalError
+  }
+}
+
+/**
+ * Creates an OpenAI client instance with the user's API key
+ * @param config - Client configuration
+ * @returns Configured OpenAI client instance
+ * @example
+ * const client = createOpenAIClient({ apiKey: 'sk-...' })
+ */
+export function createOpenAIClient(config: OpenAIClientConfig): OpenAI {
+  return new OpenAI({
+    apiKey: config.apiKey,
+    timeout: config.timeout ?? 30000,
+    maxRetries: config.maxRetries ?? 2,
+  })
+}
+
+/**
+ * Validates an OpenAI API key by making a test request
+ * @param apiKey - The API key to validate
+ * @returns True if the key is valid, false otherwise
+ * @example
+ * const isValid = await validateOpenAIKey('sk-...')
+ */
+export async function validateOpenAIKey(apiKey: string): Promise<boolean> {
+  if (!apiKey || !apiKey.startsWith('sk-')) {
+    return false
+  }
+
+  try {
+    const client = createOpenAIClient({ apiKey, timeout: 10000, maxRetries: 1 })
+
+    // Make a minimal request to validate the key
+    await client.models.list()
+    return true
+  } catch (error) {
+    console.error('API key validation failed:', error)
+    return false
+  }
+}
+
+/**
+ * Performs a chat completion request using the user's API key
+ * @param client - OpenAI client instance
+ * @param request - Chat completion parameters
+ * @returns Chat completion response with content and usage stats
+ * @throws OpenAIError if the request fails
+ * @example
+ * const response = await chatCompletion(client, {
+ *   systemPrompt: 'You are a helpful assistant',
+ *   userMessage: 'Hello!',
+ * })
+ */
+export async function chatCompletion(
+  client: OpenAI,
+  request: ChatCompletionRequest
+): Promise<ChatCompletionResponse> {
+  const {
+    systemPrompt,
+    userMessage,
+    model = 'gpt-4o-mini',
+    temperature = 0.7,
+    maxTokens = 1024,
+  } = request
+
+  try {
+    const completion = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature,
+      max_tokens: maxTokens,
+    })
+
+    const choice = completion.choices[0]
+    const content = choice?.message?.content
+
+    if (!content) {
+      throw new OpenAIError(
+        'No content in response',
+        'unknown'
+      )
+    }
+
+    return {
+      content,
+      promptTokens: completion.usage?.prompt_tokens ?? 0,
+      completionTokens: completion.usage?.completion_tokens ?? 0,
+      totalTokens: completion.usage?.total_tokens ?? 0,
+      model: completion.model,
+      finishReason: choice?.finish_reason ?? null,
+    }
+  } catch (error) {
+    throw categorizeOpenAIError(error)
+  }
+}
+
+/**
+ * Categorizes an OpenAI API error into a user-friendly error type
+ * @param error - The error to categorize
+ * @returns Categorized OpenAIError
+ */
+function categorizeOpenAIError(error: unknown): OpenAIError {
+  if (error instanceof OpenAIError) {
+    return error
+  }
+
+  // Handle OpenAI SDK errors
+  if (error instanceof OpenAI.APIError) {
+    const status = error.status
+
+    switch (status) {
+      case 401:
+        return new OpenAIError(
+          'Invalid API key. Please check your OpenAI API key in settings.',
+          'invalid_api_key',
+          error
+        )
+      case 429:
+        if (error.message?.includes('quota')) {
+          return new OpenAIError(
+            'API quota exceeded. Please check your OpenAI billing.',
+            'insufficient_quota',
+            error
+          )
+        }
+        return new OpenAIError(
+          'Rate limit exceeded. Please wait a moment and try again.',
+          'rate_limit',
+          error
+        )
+      case 500:
+      case 502:
+      case 503:
+        return new OpenAIError(
+          'OpenAI service is temporarily unavailable. Please try again.',
+          'server_error',
+          error
+        )
+      default:
+        return new OpenAIError(
+          error.message || 'An unexpected error occurred.',
+          'unknown',
+          error
+        )
+    }
+  }
+
+  // Handle timeout errors
+  if (error instanceof Error && error.message?.includes('timeout')) {
+    return new OpenAIError(
+      'Request timed out. Please try again.',
+      'timeout',
+      error
+    )
+  }
+
+  // Generic error handling
+  const message = error instanceof Error ? error.message : 'An unexpected error occurred'
+  return new OpenAIError(message, 'unknown', error)
+}
+
+/**
+ * Gets a user-friendly error message for display
+ * @param error - The OpenAI error
+ * @returns User-friendly error message
+ */
+export function getErrorMessage(error: OpenAIError): string {
+  switch (error.type) {
+    case 'invalid_api_key':
+      return 'Your OpenAI API key is invalid. Please update it in Settings.'
+    case 'rate_limit':
+      return 'Too many requests. Please wait a moment and try again.'
+    case 'insufficient_quota':
+      return 'Your OpenAI account has insufficient quota. Please check your billing.'
+    case 'server_error':
+      return 'OpenAI service is temporarily unavailable. Please try again later.'
+    case 'timeout':
+      return 'The request took too long. Please try again.'
+    default:
+      return error.message || 'An unexpected error occurred. Please try again.'
+  }
+}

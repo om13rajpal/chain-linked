@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Protected routes - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/composer', '/schedule', '/team', '/templates', '/settings']
+  const protectedPaths = ['/dashboard', '/composer', '/schedule', '/team', '/templates', '/settings', '/onboarding']
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
@@ -60,13 +60,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirect logged-in users away from auth pages
+  // Auth pages that should redirect logged-in users
   const authPaths = ['/login', '/signup']
   const isAuthPath = authPaths.some(path =>
     request.nextUrl.pathname === path
   )
 
   if (isAuthPath && user) {
+    // Check if there's a redirect param (e.g., for invitation acceptance)
+    const redirectParam = request.nextUrl.searchParams.get('redirect')
+    if (redirectParam && redirectParam.startsWith('/invite/')) {
+      // Allow redirect to invitation acceptance page
+      const url = request.nextUrl.clone()
+      url.pathname = redirectParam
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
+
+    // Default redirect to dashboard
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

@@ -3,25 +3,34 @@
 import Image from "next/image"
 
 import * as React from "react"
+import { useTheme } from "next-themes"
 import {
-  IconAlertCircle,
   IconBell,
   IconBrandLinkedin,
+  IconBriefcase,
+  IconBuilding,
   IconCamera,
   IconCheck,
   IconCookie,
-  IconEye,
-  IconEyeOff,
+  IconDeviceDesktop,
   IconKey,
+  IconLink,
   IconLoader2,
   IconMail,
+  IconMapPin,
+  IconMoon,
   IconPalette,
   IconPlus,
   IconRefresh,
+  IconSchool,
+  IconSun,
   IconTrash,
   IconUser,
   IconUsers,
+  IconUsersGroup,
 } from "@tabler/icons-react"
+
+import { ApiKeySettings } from "@/components/features/api-key-settings"
 
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -74,6 +83,38 @@ interface UserProfile {
 }
 
 /**
+ * LinkedIn profile data structure for settings display
+ */
+export interface LinkedInProfileData {
+  /** LinkedIn profile name */
+  name?: string
+  /** LinkedIn headline (job title) */
+  headline?: string
+  /** LinkedIn profile URL */
+  profileUrl?: string
+  /** Location */
+  location?: string
+  /** Industry */
+  industry?: string
+  /** About/Summary */
+  about?: string
+  /** Avatar URL */
+  avatarUrl?: string
+  /** Background image URL */
+  backgroundImageUrl?: string
+  /** Followers count */
+  followersCount?: number
+  /** Connections count */
+  connectionsCount?: number
+  /** Current company */
+  currentCompany?: string
+  /** Education */
+  education?: string
+  /** Last synced timestamp */
+  lastSynced?: string
+}
+
+/**
  * Props for the Settings component
  */
 export interface SettingsProps {
@@ -81,6 +122,8 @@ export interface SettingsProps {
   user?: UserProfile
   /** Whether LinkedIn account is connected */
   linkedinConnected?: boolean
+  /** LinkedIn profile data for display */
+  linkedinProfile?: LinkedInProfileData
   /** List of team members */
   teamMembers?: TeamMember[]
   /** Callback fired when settings are saved with the settings object */
@@ -213,6 +256,7 @@ function getRoleBadgeProps(role: TeamMemberRole): {
 export function Settings({
   user = DEFAULT_USER,
   linkedinConnected = false,
+  linkedinProfile,
   teamMembers = DEFAULT_TEAM_MEMBERS,
   onSave,
 }: SettingsProps) {
@@ -225,12 +269,6 @@ export function Settings({
   const [cookieStatus, setCookieStatus] = React.useState<"valid" | "expired" | "missing">(
     linkedinConnected ? "valid" : "missing"
   )
-
-  // API Keys state
-  const [openaiKey, setOpenaiKey] = React.useState("")
-  const [apiKeyError, setApiKeyError] = React.useState<string | null>(null)
-  const [showApiKey, setShowApiKey] = React.useState(false)
-  const [hasApiKey, setHasApiKey] = React.useState(false)
 
   // Brand Kit state
   const [brandKit, setBrandKit] = React.useState<BrandKit>({
@@ -267,42 +305,6 @@ export function Settings({
   }
 
   /**
-   * Handles saving the API key with validation
-   */
-  const handleSaveApiKey = () => {
-    const key = openaiKey.trim()
-
-    // Validate OpenAI API key format (sk-... or sk-proj-...)
-    if (!key) {
-      setApiKeyError("API key is required")
-      return
-    }
-
-    if (!key.startsWith("sk-")) {
-      setApiKeyError("Invalid API key format. OpenAI keys start with 'sk-'")
-      return
-    }
-
-    if (key.length < 20) {
-      setApiKeyError("API key appears to be too short")
-      return
-    }
-
-    // Clear any previous errors and save
-    setApiKeyError(null)
-    setHasApiKey(true)
-    setShowApiKey(false)
-  }
-
-  /**
-   * Handles deleting the API key
-   */
-  const handleDeleteApiKey = () => {
-    setOpenaiKey("")
-    setHasApiKey(false)
-  }
-
-  /**
    * Handles updating a team member's role
    */
   const handleUpdateRole = (memberId: string, newRole: TeamMemberRole) => {
@@ -330,9 +332,6 @@ export function Settings({
         break
       case "linkedin":
         settings.linkedin = { connected: linkedinConnected, cookieStatus }
-        break
-      case "apiKeys":
-        settings.apiKeys = { openaiConfigured: hasApiKey }
         break
       case "brandKit":
         settings.brandKit = brandKit
@@ -378,6 +377,10 @@ export function Settings({
           <TabsTrigger value="notifications" className="gap-2">
             <IconBell className="size-4" />
             Notifications
+          </TabsTrigger>
+          <TabsTrigger value="appearance" className="gap-2">
+            <IconPalette className="size-4" />
+            Appearance
           </TabsTrigger>
         </TabsList>
 
@@ -508,6 +511,150 @@ export function Settings({
                 </Button>
               </div>
 
+              {/* LinkedIn Profile Information */}
+              {linkedinConnected && linkedinProfile && (
+                <div className="space-y-4">
+                  {/* Profile Header with Background */}
+                  <div className="rounded-lg border overflow-hidden">
+                    {/* Background Image */}
+                    {linkedinProfile.backgroundImageUrl && (
+                      <div className="h-24 relative">
+                        <Image
+                          src={linkedinProfile.backgroundImageUrl}
+                          alt="Profile background"
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                    )}
+                    {/* Profile Info */}
+                    <div className={cn("p-4", linkedinProfile.backgroundImageUrl && "-mt-10")}>
+                      <div className="flex items-start gap-4">
+                        <Avatar className={cn("size-20 border-4 border-background", linkedinProfile.backgroundImageUrl && "mt-0")}>
+                          {linkedinProfile.avatarUrl ? (
+                            <AvatarImage src={linkedinProfile.avatarUrl} alt={linkedinProfile.name || "Profile"} />
+                          ) : null}
+                          <AvatarFallback className="text-xl bg-primary/10 text-primary">
+                            {getInitials(linkedinProfile.name || "LI")}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 pt-2">
+                          <h3 className="font-semibold text-lg">{linkedinProfile.name}</h3>
+                          {linkedinProfile.headline && (
+                            <p className="text-muted-foreground">{linkedinProfile.headline}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Profile Details Grid */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {/* Location */}
+                    {linkedinProfile.location && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border">
+                        <IconMapPin className="size-5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Location</p>
+                          <p className="font-medium">{linkedinProfile.location}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Industry */}
+                    {linkedinProfile.industry && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border">
+                        <IconBriefcase className="size-5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Industry</p>
+                          <p className="font-medium">{linkedinProfile.industry}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Current Company */}
+                    {linkedinProfile.currentCompany && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border">
+                        <IconBuilding className="size-5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Company</p>
+                          <p className="font-medium">{linkedinProfile.currentCompany}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Education */}
+                    {linkedinProfile.education && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border">
+                        <IconSchool className="size-5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Education</p>
+                          <p className="font-medium">{linkedinProfile.education}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Followers */}
+                    {linkedinProfile.followersCount !== undefined && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border">
+                        <IconUsersGroup className="size-5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Followers</p>
+                          <p className="font-medium">{linkedinProfile.followersCount.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Connections */}
+                    {linkedinProfile.connectionsCount !== undefined && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border">
+                        <IconUsers className="size-5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Connections</p>
+                          <p className="font-medium">{linkedinProfile.connectionsCount.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* About Section */}
+                  {linkedinProfile.about && (
+                    <div className="p-4 rounded-lg border">
+                      <h4 className="font-medium mb-2">About</h4>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">
+                        {linkedinProfile.about}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Profile URL */}
+                  {linkedinProfile.profileUrl && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border">
+                      <IconLink className="size-5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground">LinkedIn URL</p>
+                        <a
+                          href={linkedinProfile.profileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-primary hover:underline truncate block"
+                        >
+                          {linkedinProfile.profileUrl}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Last Synced */}
+                  {linkedinProfile.lastSynced && (
+                    <p className="text-xs text-muted-foreground text-right">
+                      Last synced: {new Date(linkedinProfile.lastSynced).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Cookie Status */}
               <div className="flex items-center justify-between p-4 rounded-lg border">
                 <div className="flex items-center gap-3">
@@ -556,100 +703,10 @@ export function Settings({
 
         {/* API Keys Tab */}
         <TabsContent value="api-keys">
-          <Card>
-            <CardHeader>
-              <CardTitle>API Keys</CardTitle>
-              <CardDescription>
-                Configure your own API keys for AI-powered features (BYOK)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* OpenAI API Key */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium">OpenAI API Key</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Used for AI content generation and suggestions
-                    </p>
-                  </div>
-                  {hasApiKey && (
-                    <Badge variant="default" className="bg-green-600 hover:bg-green-600">
-                      Configured
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <IconKey className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      type={showApiKey ? "text" : "password"}
-                      value={openaiKey}
-                      onChange={(e) => {
-                        setOpenaiKey(e.target.value)
-                        // Clear error when user starts typing
-                        if (apiKeyError) setApiKeyError(null)
-                      }}
-                      placeholder={hasApiKey ? "sk-********...****" : "sk-..."}
-                      className={cn(
-                        "pl-10 pr-10 font-mono",
-                        apiKeyError && "border-red-500 focus-visible:ring-red-500"
-                      )}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="absolute right-1 top-1/2 -translate-y-1/2"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? (
-                        <IconEyeOff className="size-4" />
-                      ) : (
-                        <IconEye className="size-4" />
-                      )}
-                    </Button>
-                  </div>
-                  {hasApiKey ? (
-                    <Button variant="destructive" onClick={handleDeleteApiKey}>
-                      <IconTrash className="size-4" />
-                      Delete
-                    </Button>
-                  ) : (
-                    <Button onClick={handleSaveApiKey} disabled={!openaiKey.trim()}>
-                      <IconCheck className="size-4" />
-                      Save
-                    </Button>
-                  )}
-                </div>
-
-                {/* API Key Error Message */}
-                {apiKeyError && (
-                  <p className="text-sm text-red-500 flex items-center gap-1.5">
-                    <IconAlertCircle className="size-4" />
-                    {apiKeyError}
-                  </p>
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  Your API key is encrypted and stored securely. We never share your keys
-                  with third parties.
-                </p>
-              </div>
-
-              {/* Save Button */}
-              <div className="flex justify-end pt-4 border-t">
-                <Button onClick={() => handleSave("apiKeys")} disabled={isSaving}>
-                  {isSaving ? (
-                    <IconLoader2 className="size-4 animate-spin" />
-                  ) : (
-                    <IconCheck className="size-4" />
-                  )}
-                  Save Changes
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <ApiKeySettings
+            onSave={() => onSave?.({ section: "apiKeys", apiKeyConfigured: true })}
+            onDelete={() => onSave?.({ section: "apiKeys", apiKeyConfigured: false })}
+          />
         </TabsContent>
 
         {/* Brand Kit Tab */}
@@ -969,8 +1026,192 @@ export function Settings({
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Appearance Tab */}
+        <TabsContent value="appearance">
+          <AppearanceSettings />
+        </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+/**
+ * Appearance settings component with theme selection
+ */
+function AppearanceSettings() {
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  // Prevent hydration mismatch
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const themeOptions = [
+    {
+      value: "light",
+      label: "Light",
+      description: "Classic light theme",
+      icon: IconSun,
+    },
+    {
+      value: "dark",
+      label: "Dark",
+      description: "Easy on the eyes",
+      icon: IconMoon,
+    },
+    {
+      value: "system",
+      label: "System",
+      description: "Match your device",
+      icon: IconDeviceDesktop,
+    },
+  ]
+
+  if (!mounted) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <IconPalette className="size-5" />
+            Appearance
+          </CardTitle>
+          <CardDescription>
+            Customize how ChainLinked looks on your device
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-32 rounded-xl border-2 border-border bg-muted animate-pulse"
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <IconPalette className="size-5" />
+          Appearance
+        </CardTitle>
+        <CardDescription>
+          Customize how ChainLinked looks on your device
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Theme Selection */}
+        <div className="space-y-3">
+          <Label className="text-base font-medium">Theme</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {themeOptions.map((option) => {
+              const isSelected = theme === option.value
+              const Icon = option.icon
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => setTheme(option.value)}
+                  className={cn(
+                    "relative flex flex-col items-center justify-center gap-3 p-6 rounded-xl border-2 transition-all duration-200",
+                    "hover:border-primary/50 hover:shadow-md",
+                    isSelected
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border bg-card hover:bg-accent/50"
+                  )}
+                >
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <div className="absolute top-2 right-2">
+                      <div className="size-5 rounded-full bg-primary flex items-center justify-center">
+                        <IconCheck className="size-3 text-primary-foreground" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Icon */}
+                  <div
+                    className={cn(
+                      "p-3 rounded-full transition-colors",
+                      isSelected
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="size-6" />
+                  </div>
+
+                  {/* Label and description */}
+                  <div className="text-center">
+                    <p className={cn(
+                      "font-medium",
+                      isSelected && "text-primary"
+                    )}>
+                      {option.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {option.description}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Color Accent Preview */}
+        <div className="space-y-3 pt-4 border-t">
+          <Label className="text-base font-medium">Color Palette</Label>
+          <p className="text-sm text-muted-foreground">
+            ChainLinked uses a carefully crafted Sage Green & Terracotta color palette.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-full bg-primary shadow-sm" />
+              <span className="text-sm">Sage Green (Primary)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-full bg-secondary shadow-sm" />
+              <span className="text-sm">Terracotta (Secondary)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-full bg-accent shadow-sm" />
+              <span className="text-sm">Accent</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Preview Section */}
+        <div className="space-y-3 pt-4 border-t">
+          <Label className="text-base font-medium">Preview</Label>
+          <div className="p-4 rounded-xl border bg-gradient-to-br from-card via-card to-primary/5 dark:to-primary/10">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <IconUser className="size-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Sample Post Preview</p>
+                <p className="text-xs text-muted-foreground">This is how your content looks</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Your theme preference will be applied across the entire application,
+              including all dashboards, analytics views, and content editors.
+            </p>
+            <div className="flex gap-2 mt-3">
+              <Badge variant="secondary">Leadership</Badge>
+              <Badge variant="outline">85% engagement</Badge>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
