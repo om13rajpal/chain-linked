@@ -8,8 +8,8 @@
 
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
-import { ScheduleCalendar, sampleScheduledPostItems } from "@/components/features/schedule-calendar"
-import { ScheduledPosts, sampleScheduledPosts, type ScheduledPost } from "@/components/features/scheduled-posts"
+import { ScheduleCalendar } from "@/components/features/schedule-calendar"
+import { ScheduledPosts, type ScheduledPost } from "@/components/features/scheduled-posts"
 import { SiteHeader } from "@/components/site-header"
 import { ScheduleSkeleton } from "@/components/skeletons/page-skeletons"
 import { useScheduledPosts } from "@/hooks/use-scheduled-posts"
@@ -26,19 +26,14 @@ function ScheduleContent() {
   const router = useRouter()
   const { posts: scheduledPosts, rawPosts, isLoading } = useScheduledPosts(60)
 
-  // Use real data if available, otherwise fall back to sample data
-  const displayCalendarPosts = scheduledPosts.length > 0 ? scheduledPosts : sampleScheduledPostItems
-
-  // Transform scheduled posts for the list view (different type)
-  const displayListPosts: ScheduledPost[] = rawPosts.length > 0
-    ? rawPosts.map((post) => ({
-        id: post.id,
-        content: post.content,
-        scheduledFor: post.scheduled_for,
-        status: mapListStatus(post.status),
-        mediaUrls: post.media_urls as string[] | undefined,
-      }))
-    : sampleScheduledPosts
+  // Transform scheduled posts for the list view - use real data only
+  const listPosts: ScheduledPost[] = rawPosts.map((post) => ({
+    id: post.id,
+    content: post.content,
+    scheduledFor: post.scheduled_for,
+    status: mapListStatus(post.status),
+    mediaUrls: post.media_urls as string[] | undefined,
+  }))
 
   // Navigate to compose page for scheduling new posts
   const handleScheduleNew = () => {
@@ -51,13 +46,13 @@ function ScheduleContent() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Calendar View */}
         <ScheduleCalendar
-          posts={displayCalendarPosts}
+          posts={scheduledPosts}
           isLoading={isLoading}
         />
 
         {/* List View */}
         <ScheduledPosts
-          posts={displayListPosts}
+          posts={listPosts}
           isLoading={isLoading}
           onScheduleNew={handleScheduleNew}
         />

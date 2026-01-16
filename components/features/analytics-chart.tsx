@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { IconChartLine } from "@tabler/icons-react"
 
 import {
   Card,
@@ -43,9 +44,13 @@ interface AnalyticsDataPoint {
 export interface AnalyticsChartProps {
   /**
    * Analytics data array containing date, impressions, and engagements.
-   * If not provided, sample data will be generated for demo purposes.
+   * If not provided or empty, an empty state will be shown.
    */
   data?: AnalyticsDataPoint[]
+  /**
+   * Whether the component is in a loading state
+   */
+  isLoading?: boolean
 }
 
 /**
@@ -68,12 +73,15 @@ const chartConfig = {
 } satisfies ChartConfig
 
 /**
+ * @deprecated This function generates mock data and should not be used in production.
+ * Kept for backward compatibility only.
+ *
  * Generates sample analytics data for demonstration purposes.
  * Creates 90 days of data with realistic impression and engagement patterns.
  *
  * @returns Array of analytics data points spanning 90 days
  */
-function generateSampleData(): AnalyticsDataPoint[] {
+export function generateSampleData(): AnalyticsDataPoint[] {
   const data: AnalyticsDataPoint[] = []
   const today = new Date()
 
@@ -106,6 +114,23 @@ function generateSampleData(): AnalyticsDataPoint[] {
   }
 
   return data
+}
+
+/**
+ * Empty state component for when no analytics data is available
+ */
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="rounded-full bg-muted p-4 mb-4">
+        <IconChartLine className="size-8 text-muted-foreground" />
+      </div>
+      <h3 className="font-medium text-lg">No analytics data yet</h3>
+      <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+        Analytics will appear here once your LinkedIn activity is captured via the extension.
+      </p>
+    </div>
+  )
 }
 
 /**
@@ -172,14 +197,17 @@ function formatAxisDate(dateString: string, timeRange: TimeRange): string {
  * @param props - Component props
  * @returns React component
  */
-export function AnalyticsChart({ data }: AnalyticsChartProps) {
+export function AnalyticsChart({ data, isLoading = false }: AnalyticsChartProps) {
   const [timeRange, setTimeRange] = React.useState<TimeRange>("30d")
 
-  // Use provided data or generate sample data
+  // Filter data by time range - use empty array if no data
   const chartData = React.useMemo(() => {
-    const sourceData = data ?? generateSampleData()
-    return filterDataByTimeRange(sourceData, timeRange)
+    if (!data || data.length === 0) return []
+    return filterDataByTimeRange(data, timeRange)
   }, [data, timeRange])
+
+  // Check if we have any data to show
+  const hasData = data && data.length > 0
 
   // Calculate tick interval for X-axis based on time range
   const tickInterval = React.useMemo(() => {
@@ -243,93 +271,97 @@ export function AnalyticsChart({ data }: AnalyticsChartProps) {
         </div>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <AreaChart
-            data={chartData}
-            margin={{
-              top: 10,
-              right: 10,
-              left: 0,
-              bottom: 0,
-            }}
+        {!hasData ? (
+          <EmptyState />
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[250px] w-full"
           >
-            <defs>
-              {/* Gradient for Impressions */}
-              <linearGradient id="fillImpressions" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-impressions)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-impressions)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-              {/* Gradient for Engagements */}
-              <linearGradient id="fillEngagements" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-engagements)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-engagements)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              interval={tickInterval}
-              tickFormatter={(value) => formatAxisDate(value, timeRange)}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              tickFormatter={(value) =>
-                value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value
-              }
-              width={48}
-            />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(value) => formatDate(value as string)}
-                  indicator="dot"
-                />
-              }
-            />
-            <Area
-              dataKey="impressions"
-              type="monotone"
-              fill="url(#fillImpressions)"
-              stroke="var(--color-impressions)"
-              strokeWidth={2}
-              stackId="a"
-            />
-            <Area
-              dataKey="engagements"
-              type="monotone"
-              fill="url(#fillEngagements)"
-              stroke="var(--color-engagements)"
-              strokeWidth={2}
-              stackId="b"
-            />
-          </AreaChart>
-        </ChartContainer>
+            <AreaChart
+              data={chartData}
+              margin={{
+                top: 10,
+                right: 10,
+                left: 0,
+                bottom: 0,
+              }}
+            >
+              <defs>
+                {/* Gradient for Impressions */}
+                <linearGradient id="fillImpressions" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-impressions)"
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-impressions)"
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+                {/* Gradient for Engagements */}
+                <linearGradient id="fillEngagements" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor="var(--color-engagements)"
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor="var(--color-engagements)"
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
+                interval={tickInterval}
+                tickFormatter={(value) => formatAxisDate(value, timeRange)}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tickFormatter={(value) =>
+                  value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value
+                }
+                width={48}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) => formatDate(value as string)}
+                    indicator="dot"
+                  />
+                }
+              />
+              <Area
+                dataKey="impressions"
+                type="monotone"
+                fill="url(#fillImpressions)"
+                stroke="var(--color-impressions)"
+                strokeWidth={2}
+                stackId="a"
+              />
+              <Area
+                dataKey="engagements"
+                type="monotone"
+                fill="url(#fillEngagements)"
+                stroke="var(--color-engagements)"
+                strokeWidth={2}
+                stackId="b"
+              />
+            </AreaChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )

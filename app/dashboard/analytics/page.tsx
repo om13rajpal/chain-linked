@@ -70,10 +70,11 @@ function AnalyticsContent() {
       <div className="grid grid-cols-1 gap-4 px-4 lg:grid-cols-3 lg:px-6">
         {/* Performance Chart - Takes 2 columns */}
         <div className="lg:col-span-2">
-          <AnalyticsChart data={chartData.length > 0 ? chartData : undefined} />
+          <AnalyticsChart data={chartData} />
         </div>
 
         {/* Goals Tracker - Takes 1 column */}
+        {/* TODO: Fetch real goals from posting_goals table when implemented */}
         <div className="lg:col-span-1">
           <GoalsTracker />
         </div>
@@ -82,7 +83,7 @@ function AnalyticsContent() {
       {/* Team Leaderboard and Post Performance Row */}
       <div className="grid grid-cols-1 gap-4 px-4 lg:grid-cols-2 lg:px-6">
         {/* Team Leaderboard */}
-        <TeamLeaderboard currentUserId={user?.id || "3"} />
+        <TeamLeaderboard currentUserId={user?.id} />
 
         {/* Post Performance Drill-down */}
         <PostPerformance />

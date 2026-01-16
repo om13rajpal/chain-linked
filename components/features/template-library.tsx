@@ -104,9 +104,9 @@ export interface TemplateLibraryProps {
 }
 
 /**
- * Sample templates for demonstration purposes
+ * @deprecated Sample templates for backward compatibility only. Do not use.
  */
-const SAMPLE_TEMPLATES: Template[] = [
+export const SAMPLE_TEMPLATES: Template[] = [
   {
     id: "1",
     name: "Industry Insight",
@@ -224,7 +224,7 @@ const INITIAL_FORM_DATA: TemplateFormData = {
  * ```
  */
 export function TemplateLibrary({
-  templates = SAMPLE_TEMPLATES,
+  templates = [],
   onCreateTemplate,
   onEditTemplate,
   onDeleteTemplate,

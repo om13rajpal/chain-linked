@@ -59,8 +59,10 @@ export interface GoalsTrackerProps {
   isLoading?: boolean
 }
 
-/** Sample goals data for demonstration */
-const SAMPLE_GOALS: Goal[] = [
+/**
+ * @deprecated Sample goals data for backward compatibility only. Do not use.
+ */
+export const SAMPLE_GOALS: Goal[] = [
   {
     id: "weekly-goal",
     period: "weekly",
@@ -79,9 +81,11 @@ const SAMPLE_GOALS: Goal[] = [
   },
 ]
 
-/** Default values for streak tracking */
-const DEFAULT_CURRENT_STREAK = 7
-const DEFAULT_BEST_STREAK = 14
+/**
+ * @deprecated Default streak values for backward compatibility only. Do not use.
+ */
+export const DEFAULT_CURRENT_STREAK = 7
+export const DEFAULT_BEST_STREAK = 14
 
 /**
  * Returns a human-readable label for the goal period
@@ -445,9 +449,9 @@ function GoalsTrackerSkeleton() {
  * ```
  */
 export function GoalsTracker({
-  goals = SAMPLE_GOALS,
-  currentStreak = DEFAULT_CURRENT_STREAK,
-  bestStreak = DEFAULT_BEST_STREAK,
+  goals = [],
+  currentStreak = 0,
+  bestStreak = 0,
   onUpdateGoal,
   isLoading = false,
 }: GoalsTrackerProps) {
@@ -465,6 +469,10 @@ export function GoalsTracker({
   const totalCurrent = goals.reduce((sum, g) => sum + g.current, 0)
   const totalTarget = goals.reduce((sum, g) => sum + g.target, 0)
   const overallProgress = calculateProgress(totalCurrent, totalTarget)
+
+  // Check if we have any data to show
+  const hasGoals = goals.length > 0
+  const hasStreakData = currentStreak > 0 || bestStreak > 0
 
   return (
     <Card>
@@ -494,15 +502,17 @@ export function GoalsTracker({
           <GoalCard key={goal.id} goal={goal} onUpdateGoal={onUpdateGoal} />
         ))}
 
-        {/* Empty state */}
-        {goals.length === 0 && (
+        {/* Empty state for goals */}
+        {!hasGoals && (
           <div className="text-muted-foreground py-8 text-center text-sm">
             No goals set. Create a goal to start tracking your progress.
           </div>
         )}
 
-        {/* Streak section */}
-        <StreakSection currentStreak={currentStreak} bestStreak={bestStreak} />
+        {/* Streak section - only show if there's streak data or goals */}
+        {(hasStreakData || hasGoals) && (
+          <StreakSection currentStreak={currentStreak} bestStreak={bestStreak} />
+        )}
       </CardContent>
     </Card>
   )

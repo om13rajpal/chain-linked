@@ -44,8 +44,10 @@ export interface SwipeInterfaceProps {
   isLoading?: boolean
 }
 
-/** Sample suggestions for demo/development purposes */
-const SAMPLE_SUGGESTIONS: PostSuggestion[] = [
+/**
+ * @deprecated Sample suggestions for backward compatibility only. Do not use.
+ */
+export const SAMPLE_SUGGESTIONS: PostSuggestion[] = [
   {
     id: "1",
     content:
@@ -155,7 +157,7 @@ function EmptyState() {
  * ```
  */
 export function SwipeInterface({
-  suggestions = SAMPLE_SUGGESTIONS,
+  suggestions = [],
   onSwipe,
   onPost,
   isLoading = false,

@@ -1,0 +1,257 @@
+/**
+ * Team Leaderboard Hook
+ * @description Fetches and calculates team member statistics for the leaderboard
+ * @module hooks/use-team-leaderboard
+ */
+
+'use client'
+
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import type { TeamMemberStats, LeaderboardTimeRange } from '@/components/features/team-leaderboard'
+
+/**
+ * Hook return type for team leaderboard
+ */
+interface UseTeamLeaderboardReturn {
+  /** Team member statistics for leaderboard */
+  members: TeamMemberStats[]
+  /** Loading state */
+  isLoading: boolean
+  /** Error message if any */
+  error: string | null
+  /** Currently selected time range */
+  timeRange: LeaderboardTimeRange
+  /** Update the time range */
+  setTimeRange: (range: LeaderboardTimeRange) => void
+  /** Refetch leaderboard data */
+  refetch: () => Promise<void>
+  /** Current user ID for highlighting */
+  currentUserId: string | null
+}
+
+/**
+ * Get start date for time range filter
+ * @param range - Time range to calculate
+ * @returns ISO date string for start of period
+ */
+function getStartDate(range: LeaderboardTimeRange): string {
+  const now = new Date()
+  switch (range) {
+    case 'week':
+      const weekStart = new Date(now)
+      weekStart.setDate(now.getDate() - 7)
+      return weekStart.toISOString()
+    case 'month':
+      const monthStart = new Date(now)
+      monthStart.setMonth(now.getMonth() - 1)
+      return monthStart.toISOString()
+    case 'all-time':
+    default:
+      return new Date(0).toISOString()
+  }
+}
+
+/**
+ * Hook to fetch team leaderboard data
+ * Aggregates post counts and engagement metrics per team member
+ * @returns Team leaderboard data and controls
+ * @example
+ * const { members, isLoading, timeRange, setTimeRange } = useTeamLeaderboard()
+ */
+export function useTeamLeaderboard(): UseTeamLeaderboardReturn {
+  const [members, setMembers] = useState<TeamMemberStats[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [timeRange, setTimeRange] = useState<LeaderboardTimeRange>('week')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const supabase = createClient()
+
+  /**
+   * Fetch leaderboard data from database
+   */
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setMembers([])
+        setIsLoading(false)
+        return
+      }
+      setCurrentUserId(user.id)
+
+      // Get user's team membership
+      const { data: teamMembership } = await supabase
+        .from('team_members')
+        .select('team_id')
+        .eq('user_id', user.id)
+        .single()
+
+      // If user is not in a team, show only their own stats
+      let teamMemberIds: string[] = [user.id]
+
+      if (teamMembership?.team_id) {
+        // Get all team members
+        const { data: teamMembersData } = await supabase
+          .from('team_members')
+          .select('user_id')
+          .eq('team_id', teamMembership.team_id)
+
+        if (teamMembersData && teamMembersData.length > 0) {
+          teamMemberIds = teamMembersData.map(m => m.user_id)
+        }
+      }
+
+      // Get user profiles for team members
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, name, email, avatar_url')
+        .in('id', teamMemberIds)
+
+      if (!usersData || usersData.length === 0) {
+        setMembers([])
+        setIsLoading(false)
+        return
+      }
+
+      // Get LinkedIn profiles for role/headline info
+      const { data: profilesData } = await supabase
+        .from('linkedin_profiles')
+        .select('user_id, headline')
+        .in('user_id', teamMemberIds)
+
+      // Get posts for the selected time range
+      const startDate = getStartDate(timeRange)
+      const weekStart = getStartDate('week')
+      const monthStart = getStartDate('month')
+
+      // Fetch all posts for team members
+      const { data: postsData } = await supabase
+        .from('my_posts')
+        .select('user_id, posted_at, reactions, comments, reposts, impressions')
+        .in('user_id', teamMemberIds)
+        .gte('posted_at', timeRange === 'all-time' ? new Date(0).toISOString() : startDate)
+        .order('posted_at', { ascending: false })
+
+      // Also fetch week and month posts for the respective counts
+      const { data: allPostsData } = await supabase
+        .from('my_posts')
+        .select('user_id, posted_at, reactions, comments, reposts, impressions')
+        .in('user_id', teamMemberIds)
+
+      // Aggregate stats per user
+      const userStatsMap = new Map<string, {
+        postsThisWeek: number
+        postsThisMonth: number
+        totalEngagement: number
+        totalImpressions: number
+      }>()
+
+      // Initialize all users
+      teamMemberIds.forEach(id => {
+        userStatsMap.set(id, {
+          postsThisWeek: 0,
+          postsThisMonth: 0,
+          totalEngagement: 0,
+          totalImpressions: 0,
+        })
+      })
+
+      // Calculate stats from posts
+      if (allPostsData) {
+        const now = new Date()
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+        allPostsData.forEach(post => {
+          const stats = userStatsMap.get(post.user_id)
+          if (!stats) return
+
+          const postDate = post.posted_at ? new Date(post.posted_at) : null
+          if (postDate) {
+            if (postDate >= weekAgo) {
+              stats.postsThisWeek++
+            }
+            if (postDate >= monthAgo) {
+              stats.postsThisMonth++
+            }
+          }
+
+          // Calculate engagement
+          const engagement = (post.reactions || 0) + (post.comments || 0) + (post.reposts || 0)
+          stats.totalEngagement += engagement
+          stats.totalImpressions += post.impressions || 0
+        })
+      }
+
+      // Build leaderboard entries
+      const leaderboardEntries: TeamMemberStats[] = usersData.map(userData => {
+        const profile = profilesData?.find(p => p.user_id === userData.id)
+        const stats = userStatsMap.get(userData.id) || {
+          postsThisWeek: 0,
+          postsThisMonth: 0,
+          totalEngagement: 0,
+          totalImpressions: 0,
+        }
+
+        // Calculate engagement rate (engagement / impressions * 100)
+        const engagementRate = stats.totalImpressions > 0
+          ? (stats.totalEngagement / stats.totalImpressions) * 100
+          : 0
+
+        return {
+          id: userData.id,
+          name: userData.name || userData.email?.split('@')[0] || 'Unknown User',
+          avatarUrl: userData.avatar_url || undefined,
+          role: profile?.headline || 'Team Member',
+          postsThisWeek: stats.postsThisWeek,
+          postsThisMonth: stats.postsThisMonth,
+          totalEngagement: stats.totalEngagement,
+          engagementRate: Math.round(engagementRate * 10) / 10,
+          rank: 0, // Will be calculated below
+          rankChange: 0, // Would need historical data to calculate
+        }
+      })
+
+      // Sort by engagement and assign ranks
+      const sortedEntries = [...leaderboardEntries].sort((a, b) => {
+        // Sort by engagement rate first, then by total engagement
+        if (b.engagementRate !== a.engagementRate) {
+          return b.engagementRate - a.engagementRate
+        }
+        return b.totalEngagement - a.totalEngagement
+      })
+
+      sortedEntries.forEach((entry, index) => {
+        entry.rank = index + 1
+      })
+
+      setMembers(sortedEntries)
+    } catch (err) {
+      console.error('Team leaderboard fetch error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch leaderboard')
+      setMembers([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [supabase, timeRange])
+
+  // Fetch on mount and when time range changes
+  useEffect(() => {
+    fetchLeaderboard()
+  }, [fetchLeaderboard])
+
+  return {
+    members,
+    isLoading,
+    error,
+    timeRange,
+    setTimeRange,
+    refetch: fetchLeaderboard,
+    currentUserId,
+  }
+}

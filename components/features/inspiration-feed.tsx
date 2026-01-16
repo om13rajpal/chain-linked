@@ -100,7 +100,7 @@ export type InspirationCategory = (typeof INSPIRATION_CATEGORIES)[number]["id"]
 const CONTENT_TRUNCATE_LENGTH = 180
 
 /**
- * Sample data for development and testing purposes.
+ * @deprecated Sample data for backward compatibility only. Do not use.
  * Contains 10 realistic inspiration posts across all categories.
  */
 export const sampleInspirationPosts: InspirationPost[] = [
