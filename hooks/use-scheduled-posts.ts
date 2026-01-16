@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { Tables } from '@/types/database'
 import type { ScheduledPostItem } from '@/components/features/schedule-calendar'
 
@@ -88,10 +89,13 @@ function mapStatus(status: string): ScheduledPostItem['status'] {
  * const { posts, isLoading, error } = useScheduledPosts(30)
  */
 export function useScheduledPosts(daysRange: number = 30): UseScheduledPostsReturn {
-  // Initialize with demo data to prevent skeleton flash
-  const [posts, setPosts] = useState<ScheduledPostItem[]>(DEMO_SCHEDULED_POSTS)
+  // Get auth state from context
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization
+  const [posts, setPosts] = useState<ScheduledPostItem[]>([])
   const [rawPosts, setRawPosts] = useState<Tables<'scheduled_posts'>[]>([])
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -99,18 +103,22 @@ export function useScheduledPosts(daysRange: number = 30): UseScheduledPostsRetu
    * Fetch scheduled posts from database
    */
   const fetchPosts = useCallback(async () => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
+    // If no user (not authenticated), show demo data
+    if (!user) {
+      setPosts(DEMO_SCHEDULED_POSTS)
+      setRawPosts([])
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
-
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setPosts([])
-        setRawPosts([])
-        setIsLoading(false)
-        return
-      }
 
       // Calculate date range
       const startDate = new Date()
@@ -122,7 +130,7 @@ export function useScheduledPosts(daysRange: number = 30): UseScheduledPostsRetu
       const { data: postsData, error: fetchError } = await supabase
         .from('scheduled_posts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .gte('scheduled_for', startDate.toISOString())
         .lte('scheduled_for', endDate.toISOString())
         .order('scheduled_for', { ascending: true })
@@ -163,17 +171,20 @@ export function useScheduledPosts(daysRange: number = 30): UseScheduledPostsRetu
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, daysRange])
+  }, [supabase, daysRange, user, authLoading])
 
-  // Fetch on mount
+  // Fetch when auth state changes or on mount
   useEffect(() => {
     fetchPosts()
   }, [fetchPosts])
 
+  // Combined loading state
+  const combinedLoading = authLoading || isLoading
+
   return {
     posts,
     rawPosts,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     refetch: fetchPosts,
   }

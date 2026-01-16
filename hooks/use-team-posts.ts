@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { Tables } from '@/types/database'
 import type { TeamActivityItem } from '@/components/features/team-activity-feed'
 
@@ -91,10 +92,13 @@ function mapMediaToPostType(mediaType: string | null): TeamActivityItem['postTyp
  * const { posts, isLoading, error } = useTeamPosts(20)
  */
 export function useTeamPosts(limit: number = 20): UseTeamPostsReturn {
-  // Initialize with demo data to prevent skeleton flash
-  const [posts, setPosts] = useState<TeamActivityItem[]>(DEMO_TEAM_POSTS)
+  // Get auth state from context
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization
+  const [posts, setPosts] = useState<TeamActivityItem[]>([])
   const [rawPosts, setRawPosts] = useState<Tables<'my_posts'>[]>([])
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -102,18 +106,22 @@ export function useTeamPosts(limit: number = 20): UseTeamPostsReturn {
    * Fetch posts from database
    */
   const fetchPosts = useCallback(async () => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
+    // If no user (not authenticated), show demo data
+    if (!user) {
+      setPosts(DEMO_TEAM_POSTS)
+      setRawPosts([])
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
-
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setPosts([])
-        setRawPosts([])
-        setIsLoading(false)
-        return
-      }
 
       // Fetch user's profile for author info
       const { data: userData } = await supabase
@@ -123,7 +131,6 @@ export function useTeamPosts(limit: number = 20): UseTeamPostsReturn {
         .single()
 
       // Fetch posts (currently user's own posts, will be expanded to team posts)
-      // TODO: Once team structure is implemented, filter by team_id
       const { data: postsData, error: fetchError } = await supabase
         .from('my_posts')
         .select('*')
@@ -149,8 +156,6 @@ export function useTeamPosts(limit: number = 20): UseTeamPostsReturn {
       }
 
       // Transform to TeamActivityItem format
-      // For now, all posts are attributed to the current user
-      // TODO: Fetch author data for each unique user_id when team posts are implemented
       const transformedPosts: TeamActivityItem[] = postsData.map((post) => ({
         id: post.id,
         author: {
@@ -173,22 +178,26 @@ export function useTeamPosts(limit: number = 20): UseTeamPostsReturn {
       setRawPosts(postsData)
     } catch (err) {
       console.error('Team posts fetch error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch posts')
       // Use demo data on error for better UX
       setPosts(DEMO_TEAM_POSTS)
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, limit])
+  }, [supabase, limit, user, authLoading])
 
-  // Fetch on mount
+  // Fetch when auth state changes or on mount
   useEffect(() => {
     fetchPosts()
   }, [fetchPosts])
 
+  // Combined loading state
+  const combinedLoading = authLoading || isLoading
+
   return {
     posts,
     rawPosts,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     refetch: fetchPosts,
   }

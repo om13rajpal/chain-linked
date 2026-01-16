@@ -7,8 +7,9 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { Tables } from '@/types/database'
 import type { InspirationPost, InspirationCategory } from '@/components/features/inspiration-feed'
 import type { PostSuggestion } from '@/components/features/swipe-interface'
@@ -180,20 +181,23 @@ const defaultFilters: InspirationFilters = {
  * const { posts, filters, setFilters, loadMore, savePost } = useInspiration()
  */
 export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
-  // State - Initialize with demo data to prevent skeleton flash
-  const [posts, setPosts] = useState<InspirationPost[]>(DEMO_INSPIRATION_POSTS)
-  const [suggestions, setSuggestions] = useState<PostSuggestion[]>(DEMO_SUGGESTIONS)
+  // Get auth state from context
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization
+  const [posts, setPosts] = useState<InspirationPost[]>([])
+  const [suggestions, setSuggestions] = useState<PostSuggestion[]>([])
   const [rawPosts, setRawPosts] = useState<Tables<'inspiration_posts'>[]>([])
   const [savedPostIds, setSavedPostIds] = useState<Set<string>>(new Set())
   const [userNiches, setUserNiches] = useState<string[]>([])
   const [filters, setFiltersState] = useState<InspirationFilters>(defaultFilters)
   const [pagination, setPagination] = useState<PaginationState>({
     page: 0,
-    totalCount: DEMO_INSPIRATION_POSTS.length,
+    totalCount: 0,
     hasMore: false,
     isLoadingMore: false,
   })
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
@@ -282,6 +286,11 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     page: number = 0,
     append: boolean = false
   ) => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
     try {
       if (!append) {
         setIsLoading(true)
@@ -289,8 +298,6 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
         setPagination(prev => ({ ...prev, isLoadingMore: true }))
       }
       setError(null)
-
-      const { data: { user } } = await supabase.auth.getUser()
 
       // Build query
       let query = supabase
@@ -306,8 +313,6 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
       if (filters.niche !== 'all') {
         query = query.eq('niche', filters.niche)
       } else if (userNiches.length > 0 && !filters.savedOnly) {
-        // Personalize based on user niches (soft filter - boost, don't exclude)
-        // For now, we include all but order by niche match
         query = query.or(`niche.in.(${userNiches.join(',')}),niche.is.null`)
       }
 
@@ -321,7 +326,7 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
       if (filters.savedOnly && savedPostIds.size > 0) {
         query = query.in('id', Array.from(savedPostIds))
       } else if (filters.savedOnly && savedPostIds.size === 0) {
-        // No saved posts, return empty
+        // No saved posts, show empty state
         setPosts([])
         setSuggestions([])
         setRawPosts([])
@@ -399,7 +404,7 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
         isLoadingMore: false,
       })
 
-      // Fetch user data if authenticated
+      // Fetch user data if authenticated and on first page
       if (user && page === 0) {
         await Promise.all([
           fetchSavedPosts(user.id),
@@ -408,6 +413,7 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
       }
     } catch (err) {
       console.error('Inspiration fetch error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch posts')
       // Use demo data on error for better UX
       if (!append) {
         setPosts(DEMO_INSPIRATION_POSTS)
@@ -418,7 +424,7 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
       setIsLoading(false)
       setPagination(prev => ({ ...prev, isLoadingMore: false }))
     }
-  }, [supabase, filters, savedPostIds, userNiches, transformPost, transformToSuggestion, fetchSavedPosts, fetchUserNiches])
+  }, [supabase, filters, savedPostIds, userNiches, user, authLoading, transformPost, transformToSuggestion, fetchSavedPosts, fetchUserNiches])
 
   /**
    * Update filters
@@ -445,13 +451,12 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     action: 'like' | 'dislike',
     content?: string
   ) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.warn('User not authenticated, cannot save swipe preference')
-        return
-      }
+    if (!user) {
+      console.warn('User not authenticated, cannot save swipe preference')
+      return
+    }
 
+    try {
       const { error: insertError } = await supabase
         .from('swipe_preferences')
         .insert({
@@ -467,19 +472,18 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     } catch (err) {
       console.error('Swipe preference save error:', err)
     }
-  }, [supabase])
+  }, [supabase, user])
 
   /**
    * Save/bookmark a post
    */
   const savePost = useCallback(async (postId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.warn('User not authenticated, cannot save post')
-        return
-      }
+    if (!user) {
+      console.warn('User not authenticated, cannot save post')
+      return
+    }
 
+    try {
       const { error: insertError } = await supabase
         .from('saved_inspirations')
         .insert({
@@ -488,7 +492,6 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
         })
 
       if (insertError) {
-        // Check for unique constraint violation (already saved)
         if (insertError.code === '23505') {
           console.warn('Post already saved')
           return
@@ -502,19 +505,18 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     } catch (err) {
       console.error('Save post error:', err)
     }
-  }, [supabase])
+  }, [supabase, user])
 
   /**
    * Unsave/remove bookmark from a post
    */
   const unsavePost = useCallback(async (postId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        console.warn('User not authenticated, cannot unsave post')
-        return
-      }
+    if (!user) {
+      console.warn('User not authenticated, cannot unsave post')
+      return
+    }
 
+    try {
       const { error: deleteError } = await supabase
         .from('saved_inspirations')
         .delete()
@@ -535,7 +537,7 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     } catch (err) {
       console.error('Unsave post error:', err)
     }
-  }, [supabase])
+  }, [supabase, user])
 
   /**
    * Check if a post is saved
@@ -558,13 +560,17 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     await fetchPosts(0, false)
   }, [fetchPosts])
 
-  // Fetch posts on mount and when filters change
+  // Fetch posts when auth state changes or filters change
   useEffect(() => {
-    fetchPosts(0, false)
-  }, [filters.category, filters.niche, filters.savedOnly]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!authLoading) {
+      fetchPosts(0, false)
+    }
+  }, [authLoading, filters.category, filters.niche, filters.savedOnly]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search
   useEffect(() => {
+    if (authLoading) return
+
     const timeoutId = setTimeout(() => {
       if (filters.searchQuery !== '') {
         fetchPosts(0, false)
@@ -572,7 +578,10 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     }, 300)
 
     return () => clearTimeout(timeoutId)
-  }, [filters.searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.searchQuery, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Combined loading state
+  const combinedLoading = authLoading || isLoading
 
   return {
     posts,
@@ -582,7 +591,7 @@ export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
     userNiches,
     filters,
     pagination,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     setFilters,
     loadMore,

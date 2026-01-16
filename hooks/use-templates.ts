@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { Tables, TablesUpdate } from '@/types/database'
 import type { Template } from '@/components/features/template-library'
 
@@ -78,10 +79,13 @@ const DEMO_TEMPLATES: Template[] = [
  * const { templates, isLoading, createTemplate, deleteTemplate } = useTemplates()
  */
 export function useTemplates(): UseTemplatesReturn {
-  // Initialize with demo data to prevent skeleton flash
-  const [templates, setTemplates] = useState<Template[]>(DEMO_TEMPLATES)
+  // Get auth state from context
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization
+  const [templates, setTemplates] = useState<Template[]>([])
   const [rawTemplates, setRawTemplates] = useState<Tables<'templates'>[]>([])
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -89,23 +93,28 @@ export function useTemplates(): UseTemplatesReturn {
    * Fetch templates from database
    */
   const fetchTemplates = useCallback(async () => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
+    // If no user (not authenticated), show demo data
+    if (!user) {
+      setTemplates(DEMO_TEMPLATES)
+      setRawTemplates([])
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
-
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        // Keep demo data for unauthenticated users
-        setIsLoading(false)
-        return
-      }
 
       // Fetch templates for the user (own templates + public templates)
       const { data: templatesData, error: fetchError } = await supabase
         .from('templates')
         .select('*')
-        .or(`user_id.eq.${user.id},is_public.eq.true`)
+        .or(`user_id.eq.${user!.id},is_public.eq.true`)
         .order('created_at', { ascending: false })
 
       if (fetchError) {
@@ -139,10 +148,11 @@ export function useTemplates(): UseTemplatesReturn {
     } catch (err) {
       console.error('Templates fetch error:', err)
       // Keep demo data on error for better UX
+      setTemplates(DEMO_TEMPLATES)
     } finally {
       setIsLoading(false)
     }
-  }, [supabase])
+  }, [supabase, user, authLoading])
 
   /**
    * Create a new template
@@ -150,17 +160,17 @@ export function useTemplates(): UseTemplatesReturn {
   const createTemplate = useCallback(async (
     template: Omit<Template, 'id' | 'usageCount' | 'createdAt'>
   ): Promise<boolean> => {
+    if (!user) {
+      setError('You must be logged in to create templates')
+      return false
+    }
+
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setError('You must be logged in to create templates')
-        return false
-      }
 
       const { error: insertError } = await supabase
         .from('templates')
         .insert({
-          user_id: user.id,
+          user_id: user!.id,
           name: template.name,
           content: template.content,
           category: template.category,
@@ -181,7 +191,7 @@ export function useTemplates(): UseTemplatesReturn {
       setError(err instanceof Error ? err.message : 'Failed to create template')
       return false
     }
-  }, [supabase, fetchTemplates])
+  }, [supabase, fetchTemplates, user])
 
   /**
    * Update an existing template
@@ -190,12 +200,12 @@ export function useTemplates(): UseTemplatesReturn {
     id: string,
     updates: Partial<Template>
   ): Promise<boolean> => {
+    if (!user) {
+      setError('You must be logged in to update templates')
+      return false
+    }
+
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setError('You must be logged in to update templates')
-        return false
-      }
 
       // Map Template fields to database fields
       const dbUpdates: Partial<TablesUpdate<'templates'>> = {}
@@ -209,7 +219,7 @@ export function useTemplates(): UseTemplatesReturn {
         .from('templates')
         .update(dbUpdates)
         .eq('id', id)
-        .eq('user_id', user.id) // Only allow updating own templates
+        .eq('user_id', user!.id) // Only allow updating own templates
 
       if (updateError) {
         throw updateError
@@ -223,24 +233,23 @@ export function useTemplates(): UseTemplatesReturn {
       setError(err instanceof Error ? err.message : 'Failed to update template')
       return false
     }
-  }, [supabase, fetchTemplates])
+  }, [supabase, fetchTemplates, user])
 
   /**
    * Delete a template
    */
   const deleteTemplate = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setError('You must be logged in to delete templates')
-        return false
-      }
+    if (!user) {
+      setError('You must be logged in to delete templates')
+      return false
+    }
 
+    try {
       const { error: deleteError } = await supabase
         .from('templates')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id) // Only allow deleting own templates
+        .eq('user_id', user!.id) // Only allow deleting own templates
 
       if (deleteError) {
         throw deleteError
@@ -254,7 +263,7 @@ export function useTemplates(): UseTemplatesReturn {
       setError(err instanceof Error ? err.message : 'Failed to delete template')
       return false
     }
-  }, [supabase, fetchTemplates])
+  }, [supabase, fetchTemplates, user])
 
   /**
    * Increment usage count for a template
@@ -281,15 +290,18 @@ export function useTemplates(): UseTemplatesReturn {
     }
   }, [supabase, rawTemplates])
 
-  // Fetch on mount
+  // Fetch when auth state changes or on mount
   useEffect(() => {
     fetchTemplates()
   }, [fetchTemplates])
 
+  // Combined loading state
+  const combinedLoading = authLoading || isLoading
+
   return {
     templates,
     rawTemplates,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     refetch: fetchTemplates,
     createTemplate,

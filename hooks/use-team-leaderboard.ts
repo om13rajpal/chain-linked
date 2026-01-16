@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { TeamMemberStats, LeaderboardTimeRange } from '@/components/features/team-leaderboard'
 
 /**
@@ -70,40 +71,45 @@ const DEMO_LEADERBOARD: TeamMemberStats[] = [
  * const { members, isLoading, timeRange, setTimeRange } = useTeamLeaderboard()
  */
 export function useTeamLeaderboard(): UseTeamLeaderboardReturn {
-  // Initialize with demo data to prevent skeleton flash
-  const [members, setMembers] = useState<TeamMemberStats[]>(DEMO_LEADERBOARD)
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  // Get auth state from context
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization
+  const [members, setMembers] = useState<TeamMemberStats[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [timeRange, setTimeRange] = useState<LeaderboardTimeRange>('week')
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const supabase = createClient()
 
   /**
    * Fetch leaderboard data from database
    */
   const fetchLeaderboard = useCallback(async () => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
+    // If no user (not authenticated), show demo data
+    if (!user) {
+      setMembers(DEMO_LEADERBOARD)
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
-
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        // Keep demo data for unauthenticated users
-        setIsLoading(false)
-        return
-      }
-      setCurrentUserId(user.id)
 
       // Get user's team membership
       const { data: teamMembership } = await supabase
         .from('team_members')
         .select('team_id')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .single()
 
       // If user is not in a team, show only their own stats
-      let teamMemberIds: string[] = [user.id]
+      let teamMemberIds: string[] = [user!.id]
 
       if (teamMembership?.team_id) {
         // Get all team members
@@ -246,23 +252,27 @@ export function useTeamLeaderboard(): UseTeamLeaderboardReturn {
     } catch (err) {
       console.error('Team leaderboard fetch error:', err)
       // Keep demo data on error for better UX
+      setMembers(DEMO_LEADERBOARD)
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, timeRange])
+  }, [supabase, timeRange, user, authLoading])
 
-  // Fetch on mount and when time range changes
+  // Fetch when auth state changes or on mount
   useEffect(() => {
     fetchLeaderboard()
   }, [fetchLeaderboard])
 
+  // Combined loading state
+  const combinedLoading = authLoading || isLoading
+
   return {
     members,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     timeRange,
     setTimeRange,
     refetch: fetchLeaderboard,
-    currentUserId,
+    currentUserId: user?.id || null,
   }
 }

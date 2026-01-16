@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { Tables } from '@/types/database'
 import type { Goal } from '@/components/features/goals-tracker'
 
@@ -146,12 +147,15 @@ function calculateStreaks(posts: { posted_at: string | null }[]): { current: num
  * const { goals, currentStreak, bestStreak, isLoading, updateGoalTarget } = usePostingGoals()
  */
 export function usePostingGoals(userId?: string): UsePostingGoalsReturn {
-  // Initialize with demo data to prevent skeleton flash
-  const [goals, setGoals] = useState<Goal[]>(DEMO_GOALS)
+  // Get auth state from context
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization
+  const [goals, setGoals] = useState<Goal[]>([])
   const [rawGoals, setRawGoals] = useState<Tables<'posting_goals'>[]>([])
-  const [currentStreak, setCurrentStreak] = useState(7) // Demo streak
-  const [bestStreak, setBestStreak] = useState(14) // Demo best streak
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  const [currentStreak, setCurrentStreak] = useState(0)
+  const [bestStreak, setBestStreak] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -159,23 +163,27 @@ export function usePostingGoals(userId?: string): UsePostingGoalsReturn {
    * Fetch posting goals from database
    */
   const fetchGoals = useCallback(async () => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
+    // Determine target user ID
+    const targetUserId = userId || user?.id
+
+    // If no user (not authenticated), show demo data
+    if (!targetUserId) {
+      setGoals(DEMO_GOALS)
+      setCurrentStreak(7)
+      setBestStreak(14)
+      setRawGoals([])
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
-
-      // Get current user if userId not provided
-      let targetUserId = userId
-      if (!targetUserId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        targetUserId = user?.id
-      }
-
-      if (!targetUserId) {
-        setGoals([])
-        setRawGoals([])
-        setIsLoading(false)
-        return
-      }
 
       // Fetch posting goals
       const { data: goalsData, error: goalsError } = await supabase
@@ -245,7 +253,7 @@ export function usePostingGoals(userId?: string): UsePostingGoalsReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, userId])
+  }, [supabase, userId, user?.id, authLoading])
 
   /**
    * Update a goal's target posts
@@ -274,17 +282,20 @@ export function usePostingGoals(userId?: string): UsePostingGoalsReturn {
     }
   }, [supabase])
 
-  // Fetch on mount
+  // Fetch when auth state changes or on mount
   useEffect(() => {
     fetchGoals()
   }, [fetchGoals])
+
+  // Combined loading state
+  const combinedLoading = authLoading || isLoading
 
   return {
     goals,
     rawGoals,
     currentStreak,
     bestStreak,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     refetch: fetchGoals,
     updateGoalTarget,

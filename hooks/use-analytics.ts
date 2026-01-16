@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { Tables } from '@/types/database'
 
 /**
@@ -116,12 +117,15 @@ const DEMO_CHART_DATA: ChartDataPoint[] = [
  * const { metrics, chartData, isLoading, error } = useAnalytics()
  */
 export function useAnalytics(userId?: string): UseAnalyticsReturn {
-  // Initialize with demo data to prevent skeleton flash
-  const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(DEMO_METRICS)
-  const [chartData, setChartData] = useState<ChartDataPoint[]>(DEMO_CHART_DATA)
+  // Get auth state from context - this is the key fix
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization - start with null, will be set based on auth state
+  const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null)
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
   const [rawData, setRawData] = useState<Tables<'linkedin_analytics'>[]>([])
-  const [metadata, setMetadata] = useState<AnalyticsMetadata | null>({ lastUpdated: new Date().toISOString(), captureMethod: 'demo' })
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  const [metadata, setMetadata] = useState<AnalyticsMetadata | null>(null)
+  const [isLoading, setIsLoading] = useState(true) // Start true while waiting for auth
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -129,23 +133,26 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
    * Fetch analytics data from Supabase
    */
   const fetchAnalytics = useCallback(async () => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
+    // Determine target user ID
+    const targetUserId = userId || user?.id
+
+    // If no user (not authenticated), show demo data
+    if (!targetUserId) {
+      setMetrics(DEMO_METRICS)
+      setChartData(DEMO_CHART_DATA)
+      setMetadata({ lastUpdated: new Date().toISOString(), captureMethod: 'demo' })
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
-
-      // Get current user if userId not provided
-      let targetUserId = userId
-      if (!targetUserId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          setMetrics(null)
-          setChartData([])
-          setRawData([])
-          setIsLoading(false)
-          return
-        }
-        targetUserId = user.id
-      }
 
       // Fetch all analytics records for charting, ordered by captured_at
       const { data: analytics, error: fetchError } = await supabase
@@ -157,7 +164,6 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
       // If table doesn't exist or other error, use demo data
       if (fetchError) {
         console.warn('Analytics fetch warning (using demo data):', fetchError.message)
-        // Set demo data instead of throwing
         setMetrics(DEMO_METRICS)
         setChartData(DEMO_CHART_DATA)
         setMetadata({ lastUpdated: new Date().toISOString(), captureMethod: 'demo' })
@@ -207,7 +213,6 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
       const engagementRate = impressions > 0 ? (engagements / impressions) * 100 : 0
 
       // Use profile followers_count for accurate total followers
-      // The new_followers in linkedin_analytics is actually total followers in the captured data
       const totalFollowers = profile?.followers_count || latestAnalytics.new_followers || 0
       const totalConnections = profile?.connections_count || 0
 
@@ -218,11 +223,11 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
         },
         engagementRate: {
           value: engagementRate,
-          change: 0, // Would need historical data to calculate change
+          change: 0,
         },
         followers: {
           value: totalFollowers,
-          change: 0, // Would need historical data to calculate growth
+          change: 0,
         },
         profileViews: {
           value: latestAnalytics.profile_views || 0,
@@ -247,18 +252,15 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
       // Set metadata
       setMetadata({
         lastUpdated: rawDataObj?.last_updated || rawDataObj?.extractedAt || latestAnalytics.captured_at,
-        captureMethod: rawDataObj?.captureMethod || null,
+        captureMethod: rawDataObj?.captureMethod || 'extension',
       })
 
       // Build chart data from all analytics records (group by date)
       const chartDataMap = new Map<string, ChartDataPoint>()
-
-      // Process in chronological order for chart
       const sortedAnalytics = [...analytics].reverse()
 
       sortedAnalytics.forEach((record) => {
         const date = record.captured_at.split('T')[0]
-        // For multiple records on same day, keep the latest one (last in array since we reversed)
         chartDataMap.set(date, {
           date,
           impressions: record.impressions || 0,
@@ -267,7 +269,6 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
         })
       })
 
-      // Sort by date for chart display
       const sortedChartData = Array.from(chartDataMap.values()).sort(
         (a, b) => a.date.localeCompare(b.date)
       )
@@ -275,6 +276,7 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
       setChartData(sortedChartData)
     } catch (err) {
       console.error('Analytics fetch error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch analytics')
       // Use demo data on error for better UX
       setMetrics(DEMO_METRICS)
       setChartData(DEMO_CHART_DATA)
@@ -282,19 +284,22 @@ export function useAnalytics(userId?: string): UseAnalyticsReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, userId])
+  }, [supabase, userId, user?.id, authLoading])
 
-  // Fetch on mount
+  // Fetch when auth state changes or on mount
   useEffect(() => {
     fetchAnalytics()
   }, [fetchAnalytics])
+
+  // Combined loading state - loading if auth is loading OR data is loading
+  const combinedLoading = authLoading || isLoading
 
   return {
     metrics,
     chartData,
     rawData,
     metadata,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     refetch: fetchAnalytics,
   }

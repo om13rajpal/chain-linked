@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuthContext } from '@/lib/auth/auth-provider'
 import type { Tables } from '@/types/database'
 import type {
   PostPerformanceData,
@@ -139,11 +140,14 @@ const DEMO_POST_ANALYTICS: PostPerformanceData[] = [
  * const { posts, selectedPost, selectPost, isLoading } = usePostAnalytics()
  */
 export function usePostAnalytics(userId?: string, limit = 10): UsePostAnalyticsReturn {
-  // Initialize with demo data to prevent skeleton flash
-  const [posts, setPosts] = useState<PostPerformanceData[]>(DEMO_POST_ANALYTICS)
-  const [selectedPost, setSelectedPost] = useState<PostPerformanceData | null>(DEMO_POST_ANALYTICS[0])
+  // Get auth state from context
+  const { user, isLoading: authLoading } = useAuthContext()
+
+  // State initialization
+  const [posts, setPosts] = useState<PostPerformanceData[]>([])
+  const [selectedPost, setSelectedPost] = useState<PostPerformanceData | null>(null)
   const [rawPosts, setRawPosts] = useState<Tables<'post_analytics'>[]>([])
-  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -151,22 +155,26 @@ export function usePostAnalytics(userId?: string, limit = 10): UsePostAnalyticsR
    * Fetch post analytics from database
    */
   const fetchAnalytics = useCallback(async () => {
+    // Don't fetch if auth is still loading
+    if (authLoading) {
+      return
+    }
+
+    // Determine target user ID
+    const targetUserId = userId || user?.id
+
+    // If no user (not authenticated), show demo data
+    if (!targetUserId) {
+      setPosts(DEMO_POST_ANALYTICS)
+      setSelectedPost(DEMO_POST_ANALYTICS[0])
+      setRawPosts([])
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
-
-      // Get current user if userId not provided
-      let targetUserId = userId
-      if (!targetUserId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        targetUserId = user?.id
-      }
-
-      if (!targetUserId) {
-        // Keep demo data for unauthenticated users
-        setIsLoading(false)
-        return
-      }
 
       // Fetch post analytics ordered by impressions
       const { data: analyticsData, error: analyticsError } = await supabase
@@ -248,10 +256,12 @@ export function usePostAnalytics(userId?: string, limit = 10): UsePostAnalyticsR
     } catch (err) {
       console.error('Post analytics fetch error:', err)
       // Keep demo data on error for better UX
+      setPosts(DEMO_POST_ANALYTICS)
+      setSelectedPost(DEMO_POST_ANALYTICS[0])
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, userId, limit, selectedPost])
+  }, [supabase, userId, user?.id, limit, authLoading])
 
   /**
    * Select a post for detailed view
@@ -265,16 +275,19 @@ export function usePostAnalytics(userId?: string, limit = 10): UsePostAnalyticsR
     setSelectedPost(post || null)
   }, [posts])
 
-  // Fetch on mount
+  // Fetch when auth state changes or on mount
   useEffect(() => {
     fetchAnalytics()
   }, [fetchAnalytics])
+
+  // Combined loading state
+  const combinedLoading = authLoading || isLoading
 
   return {
     posts,
     selectedPost,
     rawPosts,
-    isLoading,
+    isLoading: combinedLoading,
     error,
     selectPost,
     refetch: fetchAnalytics,
