@@ -91,9 +91,10 @@ function mapMediaToPostType(mediaType: string | null): TeamActivityItem['postTyp
  * const { posts, isLoading, error } = useTeamPosts(20)
  */
 export function useTeamPosts(limit: number = 20): UseTeamPostsReturn {
-  const [posts, setPosts] = useState<TeamActivityItem[]>([])
+  // Initialize with demo data to prevent skeleton flash
+  const [posts, setPosts] = useState<TeamActivityItem[]>(DEMO_TEAM_POSTS)
   const [rawPosts, setRawPosts] = useState<Tables<'my_posts'>[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 

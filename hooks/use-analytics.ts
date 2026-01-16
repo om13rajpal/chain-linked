@@ -116,11 +116,12 @@ const DEMO_CHART_DATA: ChartDataPoint[] = [
  * const { metrics, chartData, isLoading, error } = useAnalytics()
  */
 export function useAnalytics(userId?: string): UseAnalyticsReturn {
-  const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null)
-  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
+  // Initialize with demo data to prevent skeleton flash
+  const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(DEMO_METRICS)
+  const [chartData, setChartData] = useState<ChartDataPoint[]>(DEMO_CHART_DATA)
   const [rawData, setRawData] = useState<Tables<'linkedin_analytics'>[]>([])
-  const [metadata, setMetadata] = useState<AnalyticsMetadata | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [metadata, setMetadata] = useState<AnalyticsMetadata | null>({ lastUpdated: new Date().toISOString(), captureMethod: 'demo' })
+  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 

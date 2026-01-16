@@ -180,20 +180,20 @@ const defaultFilters: InspirationFilters = {
  * const { posts, filters, setFilters, loadMore, savePost } = useInspiration()
  */
 export function useInspiration(initialLimit = PAGE_SIZE): UseInspirationReturn {
-  // State
-  const [posts, setPosts] = useState<InspirationPost[]>([])
-  const [suggestions, setSuggestions] = useState<PostSuggestion[]>([])
+  // State - Initialize with demo data to prevent skeleton flash
+  const [posts, setPosts] = useState<InspirationPost[]>(DEMO_INSPIRATION_POSTS)
+  const [suggestions, setSuggestions] = useState<PostSuggestion[]>(DEMO_SUGGESTIONS)
   const [rawPosts, setRawPosts] = useState<Tables<'inspiration_posts'>[]>([])
   const [savedPostIds, setSavedPostIds] = useState<Set<string>>(new Set())
   const [userNiches, setUserNiches] = useState<string[]>([])
   const [filters, setFiltersState] = useState<InspirationFilters>(defaultFilters)
   const [pagination, setPagination] = useState<PaginationState>({
     page: 0,
-    totalCount: 0,
+    totalCount: DEMO_INSPIRATION_POSTS.length,
     hasMore: false,
     isLoadingMore: false,
   })
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
   const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()

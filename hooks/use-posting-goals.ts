@@ -146,11 +146,12 @@ function calculateStreaks(posts: { posted_at: string | null }[]): { current: num
  * const { goals, currentStreak, bestStreak, isLoading, updateGoalTarget } = usePostingGoals()
  */
 export function usePostingGoals(userId?: string): UsePostingGoalsReturn {
-  const [goals, setGoals] = useState<Goal[]>([])
+  // Initialize with demo data to prevent skeleton flash
+  const [goals, setGoals] = useState<Goal[]>(DEMO_GOALS)
   const [rawGoals, setRawGoals] = useState<Tables<'posting_goals'>[]>([])
-  const [currentStreak, setCurrentStreak] = useState(0)
-  const [bestStreak, setBestStreak] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
+  const [currentStreak, setCurrentStreak] = useState(7) // Demo streak
+  const [bestStreak, setBestStreak] = useState(14) // Demo best streak
+  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 

@@ -88,9 +88,10 @@ function mapStatus(status: string): ScheduledPostItem['status'] {
  * const { posts, isLoading, error } = useScheduledPosts(30)
  */
 export function useScheduledPosts(daysRange: number = 30): UseScheduledPostsReturn {
-  const [posts, setPosts] = useState<ScheduledPostItem[]>([])
+  // Initialize with demo data to prevent skeleton flash
+  const [posts, setPosts] = useState<ScheduledPostItem[]>(DEMO_SCHEDULED_POSTS)
   const [rawPosts, setRawPosts] = useState<Tables<'scheduled_posts'>[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // Start false - demo data is ready
   const [error, setError] = useState<string | null>(null)
   const supabase = createClient()
 
