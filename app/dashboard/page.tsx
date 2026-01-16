@@ -8,8 +8,8 @@
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { GoalsTracker } from "@/components/features/goals-tracker"
-import { ScheduleCalendar, sampleScheduledPostItems } from "@/components/features/schedule-calendar"
-import { TeamActivityFeed, sampleTeamPosts } from "@/components/features/team-activity-feed"
+import { ScheduleCalendar } from "@/components/features/schedule-calendar"
+import { TeamActivityFeed } from "@/components/features/team-activity-feed"
 import { SiteHeader } from "@/components/site-header"
 import { DashboardSkeleton } from "@/components/skeletons/page-skeletons"
 import { useTeamPosts } from "@/hooks/use-team-posts"
@@ -75,10 +75,6 @@ function DashboardContent() {
   const { posts: teamPosts, isLoading: postsLoading } = useTeamPosts(20)
   const { posts: scheduledPosts, isLoading: scheduleLoading } = useScheduledPosts(30)
 
-  // Use real data if available, otherwise fall back to sample data
-  const displayTeamPosts = teamPosts.length > 0 ? teamPosts : sampleTeamPosts
-  const displayScheduledPosts = scheduledPosts.length > 0 ? scheduledPosts : sampleScheduledPostItems
-
   // Get display name for welcome message
   const displayName = profile?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'there'
 
@@ -125,7 +121,7 @@ function DashboardContent() {
         {/* Schedule Calendar - Takes 2 columns */}
         <div className="lg:col-span-2">
           <ScheduleCalendar
-            posts={displayScheduledPosts}
+            posts={scheduledPosts}
             isLoading={scheduleLoading}
           />
         </div>
@@ -139,7 +135,7 @@ function DashboardContent() {
       {/* Team Activity Feed */}
       <div className="px-4 lg:px-6">
         <TeamActivityFeed
-          posts={displayTeamPosts}
+          posts={teamPosts}
           isLoading={postsLoading}
         />
       </div>
